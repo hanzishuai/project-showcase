@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>项目展示 · 三个项目，一张顶部节点地图</title>
+<meta name="description" content="三个项目的阶段叙述、界面证据与资料完整性说明">
+<style>
+/* Hallmark · shape: workbench · genre: editorial · theme: Blueprint Ink (deal 1/1, seed nav-color-2026-11-10) · hero: poster · job: project portfolio nav showcase · draw: c1d8ee */
+:root{
+--c1:#f7f6f2;
+--c2:#16233a;
+--c3:#2f5d8c;
+--c4:#47536b;
+--c5:#c7d8ee;
+--c6:#aebbd0;
+--c7:#e8b877;
+--c8:#e6ecf5;
+--c9:#cdd8e8;
+--c10:#1e2c46;
+--c11:#b6c4d8;
+--c12:#1a2740;
+--c13:#f7f6f2;
+--c14:#f5dfb4;
+--c15:#4d5668;
+--c16:#c9d3e2;
+--c17:#fbfaf7;
+--c18:#dbe3ef;
+--c19:#a9b8cf;
+--c20:#202b3e;
+--c21:#eef2f8;
+--c22:#2b3a55;
+--c23:#dfe6f0;
+--font-body:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+--font-display:"Songti SC","SimSun",Georgia,serif;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--c1);color:var(--c2);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.topnav{position:sticky;top:0;z-index:50;background:var(--c2);color:var(--c1);border-bottom:2px solid var(--c3)}
+.nav-head{display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between;padding:8px 36px;border-bottom:1px solid var(--c4)}
+.nav-head .brand{font-size:12px;color:var(--c5);font-weight:700}
+.nav-head .hint{font-size:12px;color:var(--c6)}
+.hud{font-size:12px;color:var(--c1);white-space:nowrap}
+.hud b{color:var(--c7);font-weight:700}
+.hud i{font-style:normal;color:var(--c6);margin:0 8px}
+.nav-bar{display:grid;grid-template-columns:264px minmax(0,1fr);gap:12px;padding:8px 36px 12px;align-items:stretch}
+.proj-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;min-width:0}
+.proj-switch a{display:flex;align-items:center;justify-content:center;min-width:0;padding:8px 8px;min-height:44px;font-size:12px;line-height:1.3;text-align:center;text-decoration:none;white-space:nowrap;border:1px solid var(--c4);color:var(--c9);background:var(--c10)}
+.proj-switch a.on{border-color:var(--c7);color:var(--c7);background:var(--c12);font-weight:700}
+.nav-grid{display:grid;min-width:0}
+.nav-row{display:none;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;align-items:stretch}
+.nav-row.on{display:grid}
+.nav-row a.node{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:44px;padding:8px 8px;font-size:12px;line-height:1.3;text-decoration:none;border:1px solid var(--c4);color:var(--c9);background:var(--c10);overflow-wrap:anywhere}
+.nav-row a.node.empty{color:var(--c11);background:var(--c12);border-style:dashed}
+.nav-row a.node.on{border-color:var(--c7);color:var(--c7);background:var(--c12);font-weight:700}
+.nav-row.ph{display:none}
+.progressline{height:3px;background:var(--c4)}
+.progressline i{display:block;height:100%;width:0;background:var(--c7)}
+.page{max-width:1360px;margin:0 auto;padding:36px 56px 92px}
+.mast-top{display:flex;justify-content:space-between;gap:16px;border-top:3px solid var(--c2);border-bottom:1px solid var(--c2);padding:12px 0;font-size:12px;color:var(--c4)}
+.kicker{margin:28px 0 12px;font-size:12px;color:var(--c3);font-weight:700}
+h1{font-family:var(--font-display);font-size:58px;line-height:1.14;margin:0 0 16px;font-weight:700}
+.dek{font-size:17px;line-height:1.9;color:var(--c4);max-width:1020px;margin:0 0 16px}
+.byline{font-size:12px;line-height:1.9;color:var(--c15);border-bottom:1px solid var(--c16);padding-bottom:20px;margin:0}
+.project{border-top:3px solid var(--c2);margin-top:52px;padding-top:24px;scroll-margin-top:calc(var(--navh,190px) + 16px)}
+.project-head .pno{font-size:12px;color:var(--c3);font-weight:700}
+.project-head h2{font-family:var(--font-display);font-size:43px;line-height:1.2;margin:12px 0 16px}
+.project-head .pdek{font-size:16.5px;line-height:1.95;color:var(--c4);max-width:1020px;margin:0 0 20px}
+.meta{display:flex;flex-wrap:wrap;border:1px solid var(--c16);background:var(--c17)}
+.meta div{flex:1;min-width:180px;padding:12px 16px;border-right:1px solid var(--c16)}
+.meta div:last-child{border-right:0}
+.meta dt{font-size:12px;color:var(--c15);margin:0 0 4px}
+.meta dd{margin:0;font-size:14.5px;font-weight:600}
+.layout{display:grid;grid-template-columns:172px minmax(0,1fr) 246px;gap:36px;margin-top:36px}
+.rail{position:sticky;top:calc(var(--navh,190px) + 16px);align-self:start;border-left:2px solid var(--c16);min-width:0}
+.rail .cap{font-size:12px;color:var(--c15);padding:0 0 12px 20px;line-height:1.7}
+.rail a{display:block;position:relative;padding:8px 0 8px 20px;color:var(--c15);text-decoration:none;font-size:13px;line-height:1.5;border-bottom:1px solid var(--c18)}
+.rail a::before{content:"";position:absolute;left:-7px;top:14px;width:12px;height:12px;border:2px solid var(--c19);background:var(--c1);border-radius:50%}
+.rail a.on{color:var(--c2);font-weight:700}
+.rail a.on::before{background:var(--c3);border-color:var(--c3)}
+.rail a small{display:block;font-size:12px;font-weight:400;color:var(--c15);margin-top:2px;line-height:1.5}
+article{min-width:0}
+.stage{scroll-margin-top:calc(var(--navh,190px) + 16px);padding:0 0 40px;margin:0 0 40px;border-bottom:1px solid var(--c16)}
+.stage:last-child{border-bottom:0}
+.stage .no{font-size:12px;color:var(--c3);font-weight:700}
+.stage h3{font-family:var(--font-display);font-size:29px;margin:8px 0 12px;line-height:1.3}
+.stage .state{display:inline-block;font-size:12px;padding:4px 8px;border:1px solid var(--c3);color:var(--c3);margin:0 0 20px;line-height:1.5;max-width:100%}
+.stage .state.gray{border-color:var(--c19);color:var(--c15)}
+.stage p{font-size:15.5px;line-height:2.05;color:var(--c20);margin:0 0 16px;text-align:left}
+.stage > p:first-of-type::first-letter{font-family:var(--font-display);font-size:52px;float:left;line-height:.9;padding:4px 8px 0 0;color:var(--c3)}
+blockquote{margin:24px 0;padding:16px 24px;border-left:2px solid var(--c3);background:var(--c21);font-size:15px;line-height:1.95;color:var(--c22)}
+blockquote cite{display:block;margin-top:8px;font-size:12px;font-style:normal;color:var(--c15);}
+.shot{margin:24px 0;background:var(--c13);padding:8px;border:1px solid var(--c16)}
+.shot img{display:block;width:100%;height:auto;border:1px solid var(--c23)}
+.shot figcaption{font-size:12px;line-height:1.8;color:var(--c4);padding:12px 4px 4px}
+.shot figcaption b{color:var(--c2)}
+.shot figcaption em{display:block;font-style:normal;color:var(--c3);margin-top:4px;font-size:12px}
+.facts{border-top:3px solid var(--c2);padding-top:16px;position:sticky;top:calc(var(--navh,190px) + 16px);align-self:start;min-width:0}
+.facts h4{font-size:12px;margin:0 0 16px;color:var(--c3)}
+.facts dl{margin:0}
+.facts dt{font-size:12px;color:var(--c15);margin-top:16px}
+.facts dd{margin:4px 0 0;font-size:14px;line-height:1.6;font-weight:600}
+.facts hr{border:0;border-top:1px solid var(--c16);margin:20px 0}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--c3);color:var(--c3);padding:4px 8px;margin:0 4px 4px 0}
+.honest{border:1px solid var(--c16);padding:20px 20px;background:var(--c21)}
+.honest h4{font-size:12px;color:var(--c3);margin:0 0 12px}
+.honest ul{margin:0;padding-left:20px;font-size:13px;line-height:1.95;color:var(--c4)}
+.scope{margin-top:60px;border:1px solid var(--c16);background:var(--c17);padding:24px 28px}
+.scope h2{font-family:var(--font-display);font-size:26px;margin:0 0 12px}
+.scope p{font-size:14px;line-height:1.95;color:var(--c4);margin:0 0 12px}
+.scope .placeholder{border-top:1px dashed var(--c19);margin-top:16px;padding-top:16px;font-size:13.5px;color:var(--c15);line-height:1.9}
+footer{margin-top:48px;border-top:3px solid var(--c2);padding-top:16px;font-size:12px;line-height:1.9;color:var(--c15)}
+@media(max-width:1100px){.nav-bar{grid-template-columns:248px minmax(0,1fr)}.layout{grid-template-columns:160px minmax(0,1fr)}.facts{grid-column:1/-1;position:static}.facts dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}}
+@media(max-width:760px){.nav-head,.nav-bar{padding-left:16px;padding-right:16px}.nav-head .hint{display:none}.nav-bar{grid-template-columns:minmax(0,1fr);gap:8px}.nav-row.on{grid-template-columns:repeat(3,minmax(0,1fr))}.page{padding:24px 20px}.layout{grid-template-columns:minmax(0,1fr)}.rail{position:static;display:flex;flex-wrap:wrap;gap:8px;border-left:0;border-bottom:1px solid var(--c16);padding-bottom:12px}.rail a{border:1px solid var(--c16);padding:8px 8px;font-size:12px}.rail a::before{display:none}.rail .cap{width:100%;padding:0}h1{font-size:38px}.project-head h2{font-size:29px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+:focus-visible{outline:2px solid var(--c3);outline-offset:2px}
+.topnav :focus-visible{outline-color:var(--c7)}
+html,body{overflow-x:clip}
+code.missing-value{font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit}
+h4{margin:0}
+.facts h4,.honest h4{margin:24px 0 12px}
+.stage p,.scope p,.honest li,.nav-head .hint{overflow-wrap:anywhere}
+.framework{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;padding:0;list-style:none;font-size:12px;color:var(--c4)}
+.framework li{border:1px solid var(--c16);padding:4px 8px;min-width:0}
+
+a:active{opacity:.8}
+h1{text-wrap:balance}
+.hero{padding-bottom:64px}
+.hero-cta{display:inline-block;margin:0 0 16px;padding:12px 16px;border:1px solid var(--c2);color:var(--c2);text-decoration:none;font-size:14px;line-height:1.6}
+.tag-note{margin:0 0 8px;font-size:12px;line-height:1.85;color:var(--c15)}
+.node-note{margin:0;font-size:12px;line-height:1.85;color:var(--c15)}
+</style>
+</head><body>
+<nav class="topnav" id="topnav">
+<div class="nav-head"><span class="brand">项目展示 / 项目总览 · 顶部节点地图</span><span class="hint">点节点跳到对应阶段，方向键翻节点，数字键 1 / 2 / 3 切项目</span><span class="hud">当前位置 <i>/</i><b id="hudP">01 高校党组织管理平台</b><i>/</i><span id="hudS">需求分析</span></span></div>
+<div class="nav-bar">
+<div class="proj-switch" role="group" aria-label="切换项目">
+<a class="proj on" href="#p1" data-p="p1" title="高校党组织管理平台项目介绍">01 党组织</a>
+<a class="proj" href="#p2" data-p="p2" title="科技成果转化平台项目介绍">02 成果转化</a>
+<a class="proj" href="#p3" data-p="p3" title="科研项目申报系统简介">03 项目申报</a>
+</div>
+<div class="nav-grid">
+<div class="nav-row on" data-p="p1">
+<a class="node empty on" href="#p1-s1" data-label="需求分析" title="文档未给结构化阶段">需求分析</a>
+<a class="node empty" href="#p1-s2" data-label="方案设计" title="文档未给结构化阶段">方案设计</a>
+<a class="node" href="#p1-s3" data-label="开发实现" title="原话：基于原型设计实现">开发实现</a>
+<a class="node empty" href="#p1-s4" data-label="测试验证" title="未提供测试记录">测试验证</a>
+<a class="node empty" href="#p1-s5" data-label="部署上线" title="未提供部署信息">部署上线</a>
+<a class="node empty" href="#p1-s6" data-label="运维迭代" title="资料待补">运维迭代</a>
+</div>
+<div class="nav-row" data-p="p2">
+<a class="node empty" href="#p2-s1" data-label="需求分析" title="文档未给结构化阶段">需求分析</a>
+<a class="node empty" href="#p2-s2" data-label="方案设计" title="文档未给结构化阶段">方案设计</a>
+<a class="node" href="#p2-s3" data-label="开发实现" title="主要功能都已经做完">开发实现</a>
+<a class="node" href="#p2-s4" data-label="测试验证" title="改完的都测过了">测试验证</a>
+<a class="node" href="#p2-s5" data-label="部署上线" title="还没有正式上线">部署上线</a>
+<a class="node empty" href="#p2-s6" data-label="运维迭代" title="资料待补">运维迭代</a>
+</div>
+<div class="nav-row" data-p="p3">
+<a class="node empty" href="#p3-s1" data-label="需求分析" title="文档未给结构化阶段">需求分析</a>
+<a class="node empty" href="#p3-s2" data-label="方案设计" title="文档未给结构化阶段">方案设计</a>
+<a class="node empty" href="#p3-s3" data-label="开发实现" title="文档未给开发阶段结论">开发实现</a>
+<a class="node empty" href="#p3-s4" data-label="测试验证" title="文档未给测试结论">测试验证</a>
+<a class="node empty" href="#p3-s5" data-label="部署上线" title="业务环节：线下评审">部署上线</a>
+<a class="node empty" href="#p3-s6" data-label="运维迭代" title="资料待补">运维迭代</a>
+</div>
+<div class="nav-row ph"><span class="proj">04 待补资料</span><span class="ph-note">其余项目尚未上传，以 1 行汇总占位，不编造节点与字段</span></div>
+</div>
+</div><div class="progressline"><i id="pline"></i></div></nav>
+<div class="page">
+<section class="hero">
+<div class="mast-top"><span>项目专题档案 · 项目档案 / 三项目总览</span><span>3 个项目文件夹 / 3 份 docx / 7 张截图</span><span>2026-11-09</span></div>
+<div class="kicker">C 阶段时间轴 × A 杂志专题档案 · 顶部单行节点条与项目切换，左侧切换三个项目，右侧只列当前项目的六个阶段节点</div>
+<h1>三个项目，<br>一张顶部节点地图</h1>
+<a class="hero-cta" href="#p1-s1">从第一个项目开始阅读</a>
+<p class="dek">顶部单行节点条，左侧切换项目、右侧只显示当前项目 6 个阶段，3 个项目共 18 个阶段节点；点节点跳到当前项目的对应阶段，切项目按钮或数字键换项目，方向键顺序翻节点，数字键 1 / 2 / 3 直接切项目，滚轮自然滚动，顶部细线随阅读位置推进。正文以 C 的六段阶段时间轴为骨架，融合 A 的报头、衬线标题、首字下沉、三列长文、粘性事实清单与带图注证据。</p>
+</section>
+<p class="byline">资料来源：3 份已提交 DOCX 与 7 张截图，六段框架来自项目组合看板调研，仅作分组名，status / progress / updatedAt / links 文档均未提供，页面显示「<code class='missing-value'>—</code>」</p>
+<section class="project"><div class="project-head" id="p1">
+<div class="pno">项目 01 / 03</div><h2>基于原型设计实现，<br>把入党全流程搬进系统</h2><p class="pdek">面向高校党建工作的信息化管理系统。文档逐字写明了前后端架构、三类角色、四阶段工作流与在线考试，却没有给出结构化阶段、状态、进度、更新时间，也没有需求规格说明书或验收记录。六段框架来自项目组合看板调研，仅作分组名；段内进度叙述一律引用 DOCX 原话，未提供的字段显示「<code class='missing-value'>—</code>」。</p><dl class="meta">
+<div><dt>项目展示名</dt><dd>高校党组织管理平台项目介绍</dd></div>
+<div><dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd></div>
+<div><dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd></div>
+<div><dt>界面证据</dt><dd>3 张外部截图</dd></div>
+</dl></div><div class="layout">
+<nav class="rail" aria-label="高校党组织管理平台项目介绍 六段轨道"><div class="cap">六段分组 · 仅作导航<br>点击跳段，滚动高亮</div>
+<a href="#p1-s1" class="on">01 需求分析<small>文档未给结构化阶段</small></a>
+<a href="#p1-s2">02 方案设计<small>文档未给结构化阶段</small></a>
+<a href="#p1-s3">03 开发实现<small>原话：基于原型设计实现</small></a>
+<a href="#p1-s4">04 测试验证<small>未提供测试记录</small></a>
+<a href="#p1-s5">05 部署上线<small>未提供部署信息</small></a>
+<a href="#p1-s6">06 运维迭代<small>资料待补</small></a>
+</nav><article>
+<section class="stage" id="p1-s1"><div class="no">阶段 01 · 01 高校党组织管理平台</div><h3>需求分析</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>文档写明这是一套面向高校党建工作的信息化管理系统，基于原型设计实现，采用前后端分离架构。系统围绕学生、支部书记、党委书记三类角色构建，采用 JWT 登录鉴权；学生使用身份证号登录，可进行注册、材料提交、查看邮件通知；支部书记负责审批、公示发布与培养人分配；党委书记拥有党员查询与存档权限。</p><p>已提交资料里没有需求规格说明书、评审纪要、用例清单或原型版本记录。能确定的诉求只来自上面这些功能叙述，本页把它拆成「谁在用、各自做什么」，不把它换算成需求分析完成度。</p><blockquote>「高校党组织管理平台是一套面向高校党建工作的信息化管理系统，基于原型设计实现，采用前后端分离架构。」<cite>高校党组织管理平台项目介绍.docx · P2</cite></blockquote>
+</section>
+<section class="stage" id="p1-s2"><div class="no">阶段 02 · 01 高校党组织管理平台</div><h3>方案设计</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>架构与运行方式是文档里最确定的设计事实：后端使用 Spring Boot 3 + MySQL 构建纯 API 服务，运行于 8080 端口；前端采用 Vue 3 + Vite 开发，运行于 5173 端口，通过 Vite 代理完成接口与文件访问；系统同时适配 PC 端与移动端，界面响应式布局。</p><p>文档没有提供架构图、原型稿、数据库设计、权限矩阵或技术选型评审记录。8080 与 5173 是开发运行端口，属于实现叙述，不能据此推断部署或上线状态。本段只写看得见的部分，其余留空。</p><blockquote>「后端使用 Spring Boot 3 + MySQL 构建纯 API 服务，运行于 8080 端口；前端采用 Vue 3 + Vite 开发，运行于 5173 端口，通过 Vite 代理完成接口与文件访问。」<cite>同上 · P2</cite></blockquote>
+</section>
+<section class="stage" id="p1-s3"><div class="no">阶段 03 · 01 高校党组织管理平台</div><h3>开发实现</h3>
+<span class="state">原话：基于原型设计实现</span>
+<p>核心是覆盖入党全流程的四阶段工作流：从入党积极分子（8 项材料）到发展对象（15 项材料）、接收预备党员（4 项材料）再到预备党员转正（9 项材料），各阶段逐级解锁，全程共七次审批。审批支持通过或驳回，驳回必须填写理由；关键环节设置满 18 周岁注册、绩点不合格拦截等校验。材料均以 PDF 形式上传、下载与在线浏览。</p><p>工作流之外还有一组可直接核对的功能：党员信息批量导入/导出（Excel 模板按身份证号去重更新）；积极分子、发展对象、预备党员、正式党员四类分类管理与党关系转出登记；思想汇报按固定 12 框提交，实现连续三个月周期控制与超期提醒；学习心得不限篇数提交；入党积极分子在线考试内置共产党员网知识自测题库共 420 题，支持随机抽题、单选多选自动判分，60 分合格并保留逐题回顾与考试记录；另有待办事项、公示发布、铃铛消息通知与邮件中心。</p><p>「基于原型设计实现」是文档叙述，不等于任何完成百分比。8 / 15 / 4 / 9 项材料、七次审批、420 题、60 分都是业务功能与界面证据，不是软件项目开发进度；进度 <code class='missing-value'>—</code>、状态 <code class='missing-value'>—</code>、更新时间 <code class='missing-value'>—</code> 保持留空。</p><figure class="shot"><img src="../assets/images/微信图片_20261109162755_36_102.jpg" alt="界面证据 · 高校党组织管理平台截图一"><figcaption><b>界面证据 · 高校党组织管理平台截图一</b><br>截图含阶段计数、党员分类与铃铛消息角标，按 OCR 逐字转录为演示业务数据。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure><figure class="shot"><img src="../assets/images/微信图片_20261109162756_38_102.png" alt="界面证据 · 高校党组织管理平台截图二"><figcaption><b>界面证据 · 高校党组织管理平台截图二</b><br>材料项数与提交状态为界面证据，不是软件项目开发进度。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure><figure class="shot"><img src="../assets/images/微信图片_20261109162757_39_102.png" alt="界面证据 · 高校党组织管理平台截图三"><figcaption><b>界面证据 · 高校党组织管理平台截图三</b><br>权限项数与时间戳为界面证据，不是软件项目开发进度。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure>
+</section>
+<section class="stage" id="p1-s4"><div class="no">阶段 04 · 01 高校党组织管理平台</div><h3>测试验证</h3>
+<span class="state gray">未提供测试记录</span>
+<p>已提交 DOCX 没有写测试用例、回归记录、缺陷清单或验收签字。文档里最接近验证的一句是对工作流校验的描述：驳回必须填写理由、满 18 周岁注册与绩点不合格拦截，这属于功能规则，不是测试结论。</p><p>截图里出现的 8 / 8、15 / 15、4 / 4、9 / 9 与题目数、合格分数、党员人数，全部是业务界面数据，不能拿来当测试通过率或开发进度。本段不升级为「测试通过」，也不写通过率。</p>
+</section>
+<section class="stage" id="p1-s5"><div class="no">阶段 05 · 01 高校党组织管理平台</div><h3>部署上线</h3>
+<span class="state gray">未提供部署信息</span>
+<p>文档写明后端 8080、前端 5173 与 Vite 代理，属于本地开发运行叙述；没有给出域名、备案、部署环境、上线日期、运维主体或真实用户量。把开发端口读成已上线，是口径错置，本页不这么做。</p><p>因此这一段标注「文档未提供部署与上线信息」，不点亮、不标完成度；结构化阶段仍显示「<code class='missing-value'>—</code>」。</p>
+</section>
+<section class="stage" id="p1-s6"><div class="no">阶段 06 · 01 高校党组织管理平台</div><h3>运维迭代</h3>
+<span class="state gray">资料待补</span>
+<p>已提交 DOCX 没有写上线后的运维、监控、版本迭代或真实运营数据。按共识，这一节点置灰但仍可点：点开显示本说明，而不是一段编造的阶段完成度。六段框架只是导航分组名，段内写的是原话与界面证据，不是项目到阶段的换算结果。</p><div class="honest"><h4>诚实清单</h4><ul><li>六段阶段来自调研，非文档给出的结构化阶段</li><li>status / progress / updatedAt / links 文档均未提供，页面显示「<code class='missing-value'>—</code>」</li><li>8 / 15 / 4 / 9 项材料、420 题、60 分均为业务功能数据</li><li>本项目 3 张外部截图均为演示业务数据，不是软件项目开发进度</li><li>零编造百分比、零外部 CDN、零联网请求</li></ul></div>
+</section>
+</article><aside class="facts"><h4>事实清单</h4><dl>
+<dt>项目展示名</dt><dd>高校党组织管理平台项目介绍</dd>
+<dt>文档标题</dt><dd>高校党组织管理平台项目介绍.docx</dd>
+<dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd>
+<dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd>
+<dt>技术栈</dt><dd>Spring Boot 3 + MySQL<br>Vue 3 + Vite</dd>
+<dt>角色</dt><dd>学生 / 支部书记 / 党委书记</dd>
+<dt>界面证据</dt><dd>3 张外部截图</dd>
+</dl><hr><h4>口径标记</h4><p class="tag-note">口径标记：这一列只列事实，进度叙述逐字引用文档原话，界面上的条数均标注为演示业务数据，不换算成软件开发进度，页面不编造任何完成百分比，也不填状态与更新时间。</p>
+<hr><h4>节点说明</h4><p class="node-note">3 个项目共 18 个阶段节点，切换项目查看；文档没有原话支撑的节点置灰，仍可点击，点开只显示说明，不编造阶段完成度。</p></aside></div></section>
+<section class="project"><div class="project-head" id="p2">
+<div class="pno">项目 02 / 03</div><h2>主要功能都已经做完，<br>眼下还在边开发边修</h2><p class="pdek">基于已提交 DOCX 正文与 4 张界面截图的文字档案：项目做什么、给谁用、做到哪一步、界面上能看到什么、还差什么才能对外用，逐项写清楚。所有进度语句均逐字引用文档原话，文档未提供的结构化阶段、百分比、状态与更新时间一律留空，不做推算。</p><dl class="meta">
+<div><dt>项目展示名</dt><dd>科技成果转化平台项目介绍</dd></div>
+<div><dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd></div>
+<div><dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd></div>
+<div><dt>界面证据</dt><dd>4 张外部截图</dd></div>
+</dl></div><div class="layout">
+<nav class="rail" aria-label="科技成果转化平台项目介绍 六段轨道"><div class="cap">六段分组 · 仅作导航<br>点击跳段，滚动高亮</div>
+<a href="#p2-s1" class="on">01 需求分析<small>文档未给结构化阶段</small></a>
+<a href="#p2-s2">02 方案设计<small>文档未给结构化阶段</small></a>
+<a href="#p2-s3">03 开发实现<small>主要功能都已经做完</small></a>
+<a href="#p2-s4">04 测试验证<small>改完的都测过了</small></a>
+<a href="#p2-s5">05 部署上线<small>还没有正式上线</small></a>
+<a href="#p2-s6">06 运维迭代<small>资料待补</small></a>
+</nav><article>
+<section class="stage" id="p2-s1"><div class="no">阶段 01 · 02 科技成果转化平台</div><h3>需求分析</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>原话是这样说的：给学校和企业搭个对接的平台，学校把老师的科技成果发上来，企业把想解决的技术问题提上来，双方互相看得见、能按领域查找，发布的内容由管理员把关，随时可以下架。换句话说，它把过去分散在线下、靠人牵线的两件事放到同一张台面上。</p><p>已提交的 DOCX 没有需求规格说明书、评审纪要或用例清单。由此可拆出三类参与者与一条短链：学校发布成果、企业提出需求、管理员把关并可下架；路径是发布 → 按领域检索 → 双方看见 → 内容治理。9 个领域、20 条科技成果、20 条企业技术需求、24 张演示图片，都是文档里明写的演示版虚拟数据。</p><blockquote>「这个平台就是给学校和企业搭个对接的平台：学校把老师的科技成果发上来，企业把想解决的技术问题提上来，双方互相看得见、能按领域查找，发布的内容由管理员把关，随时可以下架。」<cite>产教融合服务平台项目介绍.docx · P2</cite></blockquote>
+</section>
+<section class="stage" id="p2-s2"><div class="no">阶段 02 · 02 科技成果转化平台</div><h3>方案设计</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>文档没有提供架构图、原型稿或技术选型说明。它描述的是仍在打磨的后台能力：后台常用选项，比如技术领域这些，正在做成自己就能维护的页面，管理员和用户的权限也在细化。</p><p>界面截图能补上的设计事实有限但明确：成果列表与需求列表是两个入口；内容按 9 个技术领域分类；后台带统计与操作日志。其余模块划分、权限矩阵、数据模型，已提交资料里都没有。</p>
+</section>
+<section class="stage" id="p2-s3"><div class="no">阶段 03 · 02 科技成果转化平台</div><h3>开发实现</h3>
+<span class="state">主要功能都已经做完</span>
+<p>这一句给出了时间、状态与具体改动三样东西：10 月 27 日开工，计划 11 月 13 日做一次交付演示；主要功能已完成但仍在边开发边修；改动集中在后台可维护选项、权限细化，以及三处界面毛病：改完角色页面不刷新、身份显示不对、点「我的发布」被带错地方。</p><p>文档没有停留在「还在修」这种笼统说法，并说明「改完的都测过了，目前没发现大问题」。这几条是判断当前工作重心的直接依据，比任何进度条都更接近真实情况。「主要功能都已经做完」是文档叙述，不等于完成百分比。</p><blockquote>「项目 10 月 27 日开工，计划 11 月 13 日先做一场交付演示，主要功能都已经做完，眼下还在边开发边修……改完的都测过了，目前没发现大问题。」<cite>同上，P2，进度叙述</cite></blockquote><figure class="shot"><img src="../assets/images/截图-科技成果列表.png" alt="界面证据 · 科技成果列表"><figcaption><b>界面证据 · 科技成果列表</b><br>学校侧成果按领域列出，可检索；页面显示的成果条数为演示库样例。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure><figure class="shot"><img src="../assets/images/截图-企业需求列表.png" alt="界面证据 · 企业需求列表"><figcaption><b>界面证据 · 企业需求列表</b><br>企业侧技术需求按领域列出，与成果侧互相可见。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure>
+</section>
+<section class="stage" id="p2-s4"><div class="no">阶段 04 · 02 科技成果转化平台</div><h3>测试验证</h3>
+<span class="state">改完的都测过了</span>
+<p>文档里关于验证只有一句定性叙述：改完的都测过了，目前没发现大问题。它对应的是上面那三处刚修好的界面毛病，属于自测口径，不是测试阶段完成。已提交资料里没有测试用例、回归记录、缺陷清单或验收签字。</p><p>因此这一段沿用原话，不升级为「测试通过」，也不写通过率。截图里出现的统计数字与日志条目同样属于演示业务数据，不能拿来当测试证据。</p>
+</section>
+<section class="stage" id="p2-s5"><div class="no">阶段 05 · 02 科技成果转化平台</div><h3>部署上线</h3>
+<span class="state">还没有正式上线</span>
+<p>平台还没有正式上线，现在挂在服务器上的只是演示版，库里也全是虚拟数据。正式上线还有一步：整个项目要落到企业名下，这件事已经跟科研处沟通过，材料他们正在准备；等企业资质、备案域名这些条件齐了，把演示数据换成真实数据，再按学校意见把登录方式改成企业微信，就能对外用了。</p><p>按原话拆成四件待办：项目落到企业名下；企业资质与备案域名齐备；演示数据换成真实数据；登录方式改成企业微信。文档没有给负责人、截止时间或完成标记，本页只列为待办，不排优先级、不标完成度。「还没有正式上线」不能反推成六段里已完成的部署上线。</p><blockquote>「平台还没有正式上线，现在挂在我服务器上的只是演示版，库里也全是虚拟数据：20 条科技成果、20 条企业技术需求，按 9 个技术领域分类，配了 24 张演示图片。」<cite>同上，P2，上线状态</cite></blockquote><figure class="shot"><img src="../assets/images/截图-管理后台统计.png" alt="界面证据 · 管理后台统计"><figcaption><b>界面证据 · 管理后台统计</b><br>前台「20 项可转化成果」与后台「21 条成果总数」口径差异如实分列，不解释、不合并。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure>
+</section>
+<section class="stage" id="p2-s6"><div class="no">阶段 06 · 02 科技成果转化平台</div><h3>运维迭代</h3>
+<span class="state gray">资料待补</span>
+<p>已提交 DOCX 没有写上线后的运维、监控、版本迭代或真实运营数据。按共识，这一节点置灰但仍可点：点开显示本说明，而不是一段编造的阶段完成度。</p><figure class="shot"><img src="../assets/images/截图-操作日志.png" alt="界面证据 · 操作日志"><figcaption><b>界面证据 · 操作日志</b><br>记录后台操作条目与时间戳，用于内容把关留痕。<em>演示业务数据，不是软件项目开发进度。</em></figcaption></figure><div class="honest"><h4>诚实清单</h4><ul><li>六段阶段来自调研，非文档给出的结构化阶段</li><li>status / progress / updatedAt / links 文档均未提供，页面显示「<code class='missing-value'>—</code>」</li><li>20 项成果、20 条需求、24 张演示图片、9 个技术领域均为演示业务数据</li><li>前台 20 与后台 21 口径如实分列，不解释、不合并</li><li>目录名与 DOCX 标题不一致，展示名按共识采用目录名</li></ul></div>
+</section>
+</article><aside class="facts"><h4>事实清单</h4><dl>
+<dt>项目展示名</dt><dd>科技成果转化平台项目介绍</dd>
+<dt>文档标题</dt><dd>文档内页标题与目录名不一致</dd>
+<dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd>
+<dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd>
+<dt>开工与演示</dt><dd>10 月 27 日开工<br>计划 11 月 13 日交付演示</dd>
+<dt>上线状态</dt><dd>没有正式上线，仅为演示版</dd>
+<dt>界面证据</dt><dd>4 张外部截图</dd>
+</dl><hr><h4>口径标记</h4><p class="tag-note">口径标记：这一列只列事实，进度叙述逐字引用文档原话，界面上的条数均标注为演示业务数据，不换算成软件开发进度，页面不编造任何完成百分比，也不填状态与更新时间。</p>
+<hr><h4>节点说明</h4><p class="node-note">3 个项目共 18 个阶段节点，切换项目查看；文档没有原话支撑的节点置灰，仍可点击，点开只显示说明，不编造阶段完成度。</p></aside></div></section>
+<section class="project"><div class="project-head" id="p3">
+<div class="pno">项目 03 / 03</div><h2>当前业务整体处于线下评审环节，<br>这是业务流程，不是开发阶段</h2><p class="pdek">供邯郸市科学技术局及全市科研单位、项目负责人使用的业务平台。文档写明从课题发布到合同签订的全流程与全程留痕，也写明当前业务处于线下评审环节；但没有给出结构化阶段、状态、进度、更新时间，项目目录里也没有附外部截图文件，只有 5 条文档图注。六段框架仅作分组名。</p><dl class="meta">
+<div><dt>项目展示名</dt><dd>科研项目申报系统简介</dd></div>
+<div><dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd></div>
+<div><dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd></div>
+<div><dt>界面证据</dt><dd>外部截图未提供</dd></div>
+</dl></div><div class="layout">
+<nav class="rail" aria-label="科研项目申报系统简介 六段轨道"><div class="cap">六段分组 · 仅作导航<br>点击跳段，滚动高亮</div>
+<a href="#p3-s1" class="on">01 需求分析<small>文档未给结构化阶段</small></a>
+<a href="#p3-s2">02 方案设计<small>文档未给结构化阶段</small></a>
+<a href="#p3-s3">03 开发实现<small>文档未给开发阶段结论</small></a>
+<a href="#p3-s4">04 测试验证<small>文档未给测试结论</small></a>
+<a href="#p3-s5">05 部署上线<small>业务环节：线下评审</small></a>
+<a href="#p3-s6">06 运维迭代<small>资料待补</small></a>
+</nav><article>
+<section class="stage" id="p3-s1"><div class="no">阶段 01 · 03 科研项目申报系统</div><h3>需求分析</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>文档写明系统集课题发布、线上填报、材料上传、单位筛选、归口分发、处室审核、二次确认、线下评审与合同签订于一体，申报与审核过程全程留痕，并支持申报书 PDF 生成与导出。使用方是邯郸市科学技术局及全市科研单位、项目负责人。</p><p>已提交资料没有需求规格说明书、评审纪要或用例清单。上面这段是功能与业务链路叙述，不是需求阶段完成度；本页不做换算，也不点亮节点。</p><blockquote>「集课题发布、线上填报、材料上传、单位筛选、归口分发、处室审核、二次确认、线下评审与合同签订于一体的业务平台，申报与审核过程全程留痕，并支持申报书 PDF 生成与导出。」<cite>科研项目申报系统简介.docx · P2</cite></blockquote>
+</section>
+<section class="stage" id="p3-s2"><div class="no">阶段 02 · 03 科研项目申报系统</div><h3>方案设计</h3>
+<span class="state gray">文档未给结构化阶段</span>
+<p>从原话可以拆出分层角色与流转顺序：科技局发布课题，项目负责人线上填报与上传材料，单位筛选后归口分发，处室审核并二次确认，最后进入线下评审与合同签订。文档图注还提到登录页、总管理员的申请书审核页面、项目负责人的申请书填报页面、单位真实数据、系统运行数据报表五个界面。</p><p>文档没有提供架构图、数据模型、权限矩阵或技术选型说明；五个界面只以图注形式出现，项目目录未附外部截图文件，本页不展示未经核对的图片。</p>
+</section>
+<section class="stage" id="p3-s3"><div class="no">阶段 03 · 03 科研项目申报系统</div><h3>开发实现</h3>
+<span class="state gray">文档未给开发阶段结论</span>
+<p>文档写明「全程留痕」与申报书 PDF 生成导出，属于业务能力描述。它没有写版本、迭代、开发记录、技术栈或负责人，也没有把任何功能标为已完成。</p><p>379 个申报个人、48 家单位、378 条申报书、348 条待线下评审，是系统现有业务量，不是代码提交量或开发进度。把业务量读成开发阶段，是口径错置，本页不这么做。</p>
+</section>
+<section class="stage" id="p3-s4"><div class="no">阶段 04 · 03 科研项目申报系统</div><h3>测试验证</h3>
+<span class="state gray">文档未给测试结论</span>
+<p>已提交 DOCX 没有写测试用例、回归记录、缺陷清单或验收签字。「348 条已进入待线下评审状态」是业务状态计数，不是测试通过率。</p><p>文档提到部分截图来源于本地环境、开发环境，但那是截图来源说明，不能当成测试环境或验收证据。本段不升级为「测试通过」，也不写通过率。</p>
+</section>
+<section class="stage" id="p3-s5"><div class="no">阶段 05 · 03 科研项目申报系统</div><h3>部署上线</h3>
+<span class="state gray">业务环节：线下评审</span>
+<p>文档原话是「当前业务整体处于线下评审环节」。按第三批澄清的共识，这里逐字直引并显式标注：这是业务流程环节，不是六段框架里的软件开发阶段，不对应到「部署上线」或任何一段，也不标完成度。</p><p>文档另写「以下部分截图来源于本地环境」，说明截图来源；没有给出域名、备案、部署环境、上线日期或运维主体。不能据此推断系统已上线或未上线。</p><blockquote>「当前业务整体处于线下评审环节。系统现有 379 个申报个人、48 家单位、378 条申报书，其中 348 条已进入待线下评审状态；以下部分截图来源于本地环境。」<cite>同上，P2，业务状态</cite></blockquote>
+</section>
+<section class="stage" id="p3-s6"><div class="no">阶段 06 · 03 科研项目申报系统</div><h3>运维迭代</h3>
+<span class="state gray">资料待补</span>
+<p>已提交 DOCX 没有写上线后的运维、监控、版本迭代或真实运营数据。外部截图 0 张，文档内嵌图注共 5 条，按原文逐字列出如下，不配图、不补写。</p><p>文档图注：图一 系统登录页；图二 总管理员的申请书审核页面（截图来源于本地环境）；图三 项目负责人的申请书填报页面（截图来源于本地环境）；图四 单位真实数据（开发环境）；图五 系统运行数据报表（截图来源于本地环境）。</p><div class="honest"><h4>诚实清单</h4><ul><li>六段阶段来自调研，非文档给出的结构化阶段</li><li>status / progress / updatedAt / links 文档均未提供，页面显示「<code class='missing-value'>—</code>」</li><li>「线下评审环节」是业务流程环节，非软件开发阶段</li><li>379 / 48 / 378 / 348 均为业务数据，不是开发进度</li><li>外部截图未提供，仅 5 条文档图注；零编造图片、零外部 CDN</li></ul></div>
+</section>
+</article><aside class="facts"><h4>事实清单</h4><dl>
+<dt>项目展示名</dt><dd>科研项目申报系统简介</dd>
+<dt>文档标题</dt><dd>科研项目申报系统简介.docx</dd>
+<dt>结构化阶段</dt><dd><code class='missing-value'>—</code></dd>
+<dt>状态 / 进度 / 更新时间</dt><dd><code class='missing-value'>—</code> / <code class='missing-value'>—</code> / <code class='missing-value'>—</code></dd>
+<dt>业务环节</dt><dd>线下评审（非开发阶段）</dd>
+<dt>业务数据</dt><dd>379 人 / 48 家 / 378 条<br>348 条待线下评审</dd>
+<dt>界面证据</dt><dd>外部截图未提供<br>文档图注 5 条</dd>
+</dl><hr><h4>口径标记</h4><p class="tag-note">口径标记：这一列只列事实，进度叙述逐字引用文档原话，界面上的条数均标注为演示业务数据，不换算成软件开发进度，页面不编造任何完成百分比，也不填状态与更新时间。</p>
+<hr><h4>节点说明</h4><p class="node-note">3 个项目共 18 个阶段节点，切换项目查看；文档没有原话支撑的节点置灰，仍可点击，点开只显示说明，不编造阶段完成度。</p></aside></div></section>
+<div class="scope"><h2>资料完整性声明</h2>
+<ol class="framework"><li data-stage="需求分析">需求分析</li><li data-stage="方案设计">方案设计</li><li data-stage="开发实现">开发实现</li><li data-stage="测试验证">测试验证</li><li data-stage="部署上线">部署上线</li><li data-stage="运维迭代">运维迭代</li></ol>
+<p>本页收录 3 个项目文件夹、3 份 docx、7 张截图。高校党组织管理平台 3 张、科技成果转化平台 4 张、科研项目申报系统 0 张：第三份 DOCX 只写了 5 条内嵌图注，项目目录未附外部截图文件，因此本项目不配图，只列图注原文。</p>
+<p>六段阶段框架（需求分析 / 方案设计 / 开发实现 / 测试验证 / 部署上线 / 运维迭代）来自调研，仅作导航分组名。当前项目位置逐字引用 DOCX 原话；科研项目申报系统「当前业务整体处于线下评审环节」是业务流程环节，非软件开发阶段，显式标注、不对应。</p>
+<p>截图里的 20 与 21 口径、8 / 15 / 4 / 9 项材料、420 题、60 分、379 / 48 / 378 / 348 等业务数字，全部标注为演示业务数据，不是软件项目开发进度。零编造百分比、零外部依赖、零联网请求，双击网页文件即可查看。</p>
+<div class="placeholder">资料待上传：其余尚未上传的项目以这一行汇总占位，不进入 3 个项目数组，不生成节点，不填任何字段。</div></div>
+<footer>正式页：C 阶段时间轴为主，融合 A 杂志专题档案质感，顶部单行节点条与项目切换。唯一数据源：<code>data/projects.json</code>，构建期由 scripts/build-data.mjs 生成 pages/index.html。文字来自已提交 DOCX 与截图逐字转录；文档未提供的字段显示「<code class='missing-value'>—</code>」。生成于 2026-11-09，2026-11-10 更新配色与导航，零外部依赖、零联网请求。</footer>
+</div>
+<script>
+(function(){
+var nav=document.getElementById("topnav");
+function setNavh(){document.documentElement.style.setProperty("--navh",nav.offsetHeight+"px");}
+setNavh();window.addEventListener("resize",setNavh);
+var nodes=[].slice.call(document.querySelectorAll("a.node"));
+var rows=[].slice.call(document.querySelectorAll(".nav-row"));
+var rails=[].slice.call(document.querySelectorAll(".rail a"));
+var projs=[].slice.call(document.querySelectorAll("a.proj"));
+var order=nodes.map(function(a){return a.getAttribute("href");});
+var hudP=document.getElementById("hudP"),hudS=document.getElementById("hudS"),pline=document.getElementById("pline");
+var labels={"p1":"01 高校党组织管理平台","p2":"02 科技成果转化平台","p3":"03 科研项目申报系统"};
+var lockUntil=0;
+function activate(hash,lock){
+  if(lock)lockUntil=Date.now()+1200;
+  var cur=nodes.filter(function(a){return a.getAttribute("href")===hash;})[0];
+  if(!cur)return;
+  var pid=hash.slice(1).split("-")[0];
+  nodes.forEach(function(a){a.classList.toggle("on",a===cur);});
+  rows.forEach(function(r){r.classList.toggle("on",r.getAttribute("data-p")===pid);});
+  projs.forEach(function(a){a.classList.toggle("on",a.getAttribute("data-p")===pid);});
+  rails.forEach(function(a){a.classList.toggle("on",a.getAttribute("href")===hash);});
+  hudP.textContent=labels[pid]||pid;hudS.textContent=cur.getAttribute("data-label");
+}
+var obs=new IntersectionObserver(function(es){if(Date.now()<lockUntil)return;es.forEach(function(e){if(e.isIntersecting){activate("#"+e.target.id);}});},{rootMargin:"-24% 0px -68% 0px"});
+document.querySelectorAll(".stage").forEach(function(s){obs.observe(s);});
+var pobs=new IntersectionObserver(function(es){if(Date.now()<lockUntil)return;es.forEach(function(e){if(e.isIntersecting){var pid=e.target.id;rows.forEach(function(r){r.classList.toggle("on",r.getAttribute("data-p")===pid);});projs.forEach(function(a){a.classList.toggle("on",a.getAttribute("data-p")===pid);});hudP.textContent=labels[pid]||pid;}});},{rootMargin:"-10% 0px -80% 0px"});
+document.querySelectorAll(".project-head").forEach(function(s){pobs.observe(s);});
+function progress(){var h=document.documentElement.scrollHeight-innerHeight;var p=h>0?scrollY/h:0;pline.style.width=(p*100).toFixed(2)+"%";}
+window.addEventListener("scroll",progress,{passive:true});progress();
+document.addEventListener("keydown",function(e){
+  var tag=(e.target&&e.target.tagName)||"";if(tag==="INPUT"||tag==="TEXTAREA")return;
+  if(e.key==="ArrowRight"||e.key==="ArrowLeft"){
+    var i=order.indexOf(location.hash);if(i<0){var on=document.querySelector("a.node.on");i=on?order.indexOf(on.getAttribute("href")):0;if(i<0)i=0;}
+    var n=i+(e.key==="ArrowRight"?1:-1);if(n<0)n=0;if(n>=order.length)n=order.length-1;
+    location.hash=order[n];activate(order[n],true);e.preventDefault();
+  }else if(e.key==="1"||e.key==="2"||e.key==="3"){
+    var h="#p"+e.key+"-s1";location.hash=h;activate(h,true);e.preventDefault();
+  }else if(e.key==="Home"){location.hash=order[0];activate(order[0],true);e.preventDefault();}
+  else if(e.key==="End"){var l=order[order.length-1];location.hash=l;activate(l,true);e.preventDefault();}
+});
+document.querySelectorAll("a.node").forEach(function(a){a.addEventListener("click",function(){activate(a.getAttribute("href"),true);});});
+document.querySelectorAll("a.proj").forEach(function(a){a.addEventListener("click",function(){var pid=a.getAttribute("href").slice(1);lockUntil=Date.now()+1200;activate("#"+pid+"-s1",true);});});
+activate(location.hash&&location.hash.indexOf("-s")>0?location.hash:"#p1-s1");
+})();
+</script>
+<script id="projects" type="application/json">{
+  "meta": {
+    "title": "项目展示：进度与内容",
+    "subtitle": "已上传项目的内容、阶段叙述与资料完整性",
+    "scope": "仅收录已提交资料",
+    "audience": "作品集展示",
+    "visual": "墨线台账 / 编辑式档案",
+    "delivery": "单页 HTML + 本地 assets，双击可开",
+    "motion": "少量入场动效，进度条零动画",
+    "source": "data/projects.json",
+    "sourceNote": "data/projects.json 是唯一数据源；进度只读取本文件，页面禁止手写百分比。",
+    "materials": {
+      "projectFolders": 3,
+      "docx": 3,
+      "screenshots": 7
+    },
+    "projectFolderCount": 3,
+    "docxCount": 3,
+    "screenshotCount": 7,
+    "placeholderLabel": "资料待上传",
+    "missingValue": "—",
+    "dataNote": "status、progress、updatedAt、links 在已提交文档中均未提供；前三者为 null，links 为空数组，页面保留占位符。",
+    "stageFramework": [
+      "需求分析",
+      "方案设计",
+      "开发实现",
+      "测试验证",
+      "部署上线",
+      "运维迭代"
+    ],
+    "stageNote": "六段框架来自项目组合看板调研；当前项目阶段仅引用 DOCX 原话，项目到阶段的换算留空。",
+    "researchLinks": [
+      {
+        "title": "Smartsheet：Project Portfolio Dashboards",
+        "url": "https://www.smartsheet.com/content/project-portfolio-dashboards"
+      },
+      {
+        "title": "Smartsheet：Roadmap Templates",
+        "url": "https://www.smartsheet.com/content/project-roadmap-templates"
+      },
+      {
+        "title": "Tempo：Project Portfolio Dashboard Best Practices",
+        "url": "https://www.tempo.io/blog/project-portfolio-dashboard-best-practices"
+      },
+      {
+        "title": "Portfolio Hub：Project Portfolio Dashboard",
+        "url": "https://portfoliohub.io/blog/project-portfolio-dashboard"
+      },
+      {
+        "title": "ONES：Executive Dashboard for Software Portfolio",
+        "url": "https://ones.com/blog/how-to-design-an-executive-dashboard-for-software-portfolio-trends-and-project-exceptions/"
+      },
+      {
+        "title": "Microsoft：软件开发生命周期阶段",
+        "url": "https://www.microsoft.com/zh-cn/power-platform/topics/phases-of-the-software-development-lifecycle"
+      },
+      {
+        "title": "Wikipedia：Systems development life cycle",
+        "url": "https://en.wikipedia.org/wiki/Systems_development_life_cycle"
+      },
+      {
+        "title": "Wingo UI：Responsive Table Mobile Cards",
+        "url": "https://wingo-ui.com/blog/responsive-table-mobile-cards"
+      },
+      {
+        "title": "TailwindFlex：Project Roadmap Timeline",
+        "url": "https://tailwindflex.com/%40jugendra-gangwar/project-roadmap-timeline-with-status-filters"
+      }
+    ],
+    "screenshotCatalog": {
+      "微信图片_20261109162755_36_102.jpg": {
+        "width": 1897,
+        "height": 959,
+        "caption": "党员查询与管理详情界面",
+        "note": "界面截图，业务阶段计数为界面证据，不是软件项目开发进度。"
+      },
+      "微信图片_20261109162756_38_102.png": {
+        "width": 1907,
+        "height": 970,
+        "caption": "入党材料全流程界面",
+        "note": "界面截图，逐级解锁规则为业务规则，不是软件项目开发进度。"
+      },
+      "微信图片_20261109162757_39_102.png": {
+        "width": 1908,
+        "height": 918,
+        "caption": "思想汇报 12 框提交界面",
+        "note": "界面截图，已提交篇数为业务演示数据，不是软件项目开发进度。"
+      },
+      "截图-科技成果列表.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "科技成果页面：按领域与关键词查找可转化成果",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-企业需求列表.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "企业需求页面：企业技术需求与联系方式",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-管理后台统计.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "管理后台：成果、需求与发布趋势统计",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-操作日志.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "操作日志：发布与权限变更留痕",
+        "note": "演示环境数据，不是软件项目开发进度。"
+      }
+    }
+  },
+  "projects": [
+    {
+      "id": "gaoxiao-dangzuzhi-guanli",
+      "name": "高校党组织管理平台项目介绍",
+      "developers": [],
+      "advisor": "",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向高校党建工作的信息化管理系统，覆盖入党全流程与三类角色审批。",
+      "stageNote": "基于原型设计实现。文档未提供结构化阶段。",
+      "content": "高校党组织管理平台是一套面向高校党建工作的信息化管理系统，基于原型设计实现，采用前后端分离架构。后端使用 Spring Boot 3 + MySQL 构建纯 API 服务，运行于 8080 端口；前端采用 Vue 3 + Vite 开发，运行于 5173 端口，通过 Vite 代理完成接口与文件访问。系统同时适配 PC 端与移动端，界面响应式布局。\n\n系统围绕学生、支部书记、党委书记三类角色构建，采用 JWT 登录鉴权。学生使用身份证号登录，可进行注册、材料提交、查看邮件通知；支部书记负责审批、公示发布与培养人分配；党委书记拥有党员查询与存档权限。\n\n系统的核心是覆盖入党全流程的四阶段工作流：从入党积极分子（8 项材料）到发展对象（15 项材料）、接收预备党员（4 项材料）再到预备党员转正（9 项材料），各阶段逐级解锁，全程共七次审批。审批支持通过或驳回，驳回必须填写理由；关键环节设置满 18 周岁注册、绩点不合格拦截等校验。材料均以 PDF 形式上传、下载与在线浏览。\n\n除工作流外，系统还提供多项实用功能：党员信息批量导入/导出（Excel 模板按身份证号去重更新）；积极分子、发展对象、预备党员、正式党员四类分类管理与党关系转出登记；思想汇报按固定 12 框提交，实现连续三个月周期控制与超期提醒；学习心得不限篇数提交；入党积极分子在线考试内置共产党员网知识自测题库共 420 题，支持随机抽题、单选多选自动判分，60 分合格并保留逐题回顾与考试记录。\n\n此外，系统还具备待办事项、公示发布、铃铛消息通知与邮件中心等功能，实现了高校党组织管理全流程的数字化、规范化与便捷化。",
+      "dataNote": "文档未提供 status、progress、updatedAt、links 与结构化阶段；截图里的阶段计数、题目数与分数均为业务界面证据，不是软件项目开发进度。",
+      "links": [],
+      "sourceFiles": [
+        "../project/高校党组织管理平台项目介绍/高校党组织管理平台项目介绍.docx"
+      ],
+      "screenshots": [
+        "微信图片_20261109162755_36_102.jpg",
+        "微信图片_20261109162756_38_102.png",
+        "微信图片_20261109162757_39_102.png"
+      ]
+    },
+    {
+      "id": "keji-chengguo-zhuanhua",
+      "name": "科技成果转化平台项目介绍",
+      "developers": [],
+      "advisor": "",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向学校与企业技术成果、需求对接的演示平台，含成果发布、需求发布与后台审计。",
+      "stageNote": "「主要功能都已经做完，眼下还在边开发边修」「平台还没有正式上线」",
+      "content": "这个平台就是给学校和企业搭个对接的平台：学校把老师的科技成果发上来，企业把想解决的技术问题提上来，双方互相看得见、能按领域查找，发布的内容由管理员把关，随时可以下架。\n\n项目 10 月 27 日开工，计划 11 月 13 日先做一场交付演示，主要功能都已经做完，眼下还在边开发边修：后台常用选项，比如技术领域这些，正在做成自己就能维护的页面，管理员和用户的权限也在细化，顺手修了改完角色页面不刷新、身份显示不对、点「我的发布」被带错地方这几处毛病，改完的都测过了，目前没发现大问题。\n\n平台还没有正式上线，现在挂在我服务器上的只是演示版，库里也全是虚拟数据：20 条科技成果、20 条企业技术需求，按 9 个技术领域分类，配了 24 张演示图片。\n\n正式上线还有一步：整个项目要落到企业名下，这件事已经跟科研处沟通过，材料他们正在准备；等企业资质、备案域名这些条件齐了，把演示数据换成真实数据，再按学校意见把登录方式改成企业微信，就能对外用了。",
+      "dataNote": "10 月 27 日、11 月 13 日为文档叙述日期；20 条科技成果、20 条企业技术需求、9 个技术领域、24 张演示图片均为演示业务数据。阶段叙述仅引用 DOCX 原话，百分比留空。",
+      "links": [],
+      "sourceFiles": [
+        "../project/科技成果转化平台项目介绍/产教融合服务平台项目介绍.docx"
+      ],
+      "screenshots": [
+        "截图-科技成果列表.png",
+        "截图-企业需求列表.png",
+        "截图-管理后台统计.png",
+        "截图-操作日志.png"
+      ]
+    },
+    {
+      "id": "keyan-xiangmu-shenbao",
+      "name": "科研项目申报系统简介",
+      "developers": [],
+      "advisor": "",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向科技局、科研单位与项目负责人的课题申报与审核业务平台。",
+      "stageNote": "「当前业务整体处于线下评审环节」",
+      "content": "科研项目申报系统供邯郸市科学技术局及全市科研单位、项目负责人使用，是集课题发布、线上填报、材料上传、单位筛选、归口分发、处室审核、二次确认、线下评审与合同签订于一体的业务平台，申报与审核过程全程留痕，并支持申报书 PDF 生成与导出。\n\n当前业务整体处于线下评审环节。系统现有 379 个申报个人、48 家单位、378 条申报书，其中 348 条已进入待线下评审状态；以下部分截图来源于本地环境。\n\n文档图注：图一 系统登录页；图二 总管理员的申请书审核页面（截图来源于本地环境）；图三 项目负责人的申请书填报页面（截图来源于本地环境）；图四 单位真实数据（开发环境）；图五 系统运行数据报表（截图来源于本地环境）。",
+      "dataNote": "379 个申报个人、48 家单位、378 条申报书、348 条待线下评审均为业务数据；当前业务整体处于线下评审环节为业务环节叙述。文档提到 5 张内嵌截图，项目目录未附外部截图文件，外部截图未提供。",
+      "links": [],
+      "sourceFiles": [
+        "../project/科研项目申报系统简介/科研项目申报系统简介.docx"
+      ],
+      "screenshots": []
+    }
+  ]
+}</script>
+</body>
+</html>

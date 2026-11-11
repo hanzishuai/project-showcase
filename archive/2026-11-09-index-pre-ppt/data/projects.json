@@ -1,0 +1,177 @@
+{
+  "meta": {
+    "title": "项目展示：进度与内容",
+    "subtitle": "已上传项目的内容、阶段叙述与资料完整性",
+    "scope": "仅收录已提交资料",
+    "audience": "作品集展示",
+    "visual": "墨线台账 / 编辑式档案",
+    "delivery": "单页 HTML + 本地 assets，双击可开",
+    "motion": "少量入场动效，进度条零动画",
+    "source": "data/projects.json",
+    "sourceNote": "data/projects.json 是唯一数据源；进度只读取本文件，页面禁止手写百分比。",
+    "materials": {
+      "projectFolders": 3,
+      "docx": 3,
+      "screenshots": 7
+    },
+    "projectFolderCount": 3,
+    "docxCount": 3,
+    "screenshotCount": 7,
+    "placeholderLabel": "资料待上传",
+    "missingValue": "—",
+    "dataNote": "status、progress、updatedAt、links 在已提交文档中均未提供；前三者为 null，links 为空数组，页面保留占位符。",
+    "stageFramework": [
+      "需求分析",
+      "方案设计",
+      "开发实现",
+      "测试验证",
+      "部署上线",
+      "运维迭代"
+    ],
+    "stageNote": "六段框架来自项目组合看板调研；当前项目阶段仅引用 DOCX 原话，项目到阶段的换算留空。",
+    "researchLinks": [
+      {
+        "title": "Smartsheet：Project Portfolio Dashboards",
+        "url": "https://www.smartsheet.com/content/project-portfolio-dashboards"
+      },
+      {
+        "title": "Smartsheet：Roadmap Templates",
+        "url": "https://www.smartsheet.com/content/project-roadmap-templates"
+      },
+      {
+        "title": "Tempo：Project Portfolio Dashboard Best Practices",
+        "url": "https://www.tempo.io/blog/project-portfolio-dashboard-best-practices"
+      },
+      {
+        "title": "Portfolio Hub：Project Portfolio Dashboard",
+        "url": "https://portfoliohub.io/blog/project-portfolio-dashboard"
+      },
+      {
+        "title": "ONES：Executive Dashboard for Software Portfolio",
+        "url": "https://ones.com/blog/how-to-design-an-executive-dashboard-for-software-portfolio-trends-and-project-exceptions/"
+      },
+      {
+        "title": "Microsoft：软件开发生命周期阶段",
+        "url": "https://www.microsoft.com/zh-cn/power-platform/topics/phases-of-the-software-development-lifecycle"
+      },
+      {
+        "title": "Wikipedia：Systems development life cycle",
+        "url": "https://en.wikipedia.org/wiki/Systems_development_life_cycle"
+      },
+      {
+        "title": "Wingo UI：Responsive Table Mobile Cards",
+        "url": "https://wingo-ui.com/blog/responsive-table-mobile-cards"
+      },
+      {
+        "title": "TailwindFlex：Project Roadmap Timeline",
+        "url": "https://tailwindflex.com/%40jugendra-gangwar/project-roadmap-timeline-with-status-filters"
+      }
+    ],
+    "screenshotCatalog": {
+      "微信图片_20261109162755_36_102.jpg": {
+        "width": 1897,
+        "height": 959,
+        "caption": "党员查询与管理详情界面",
+        "note": "界面截图，业务阶段计数为界面证据，不是软件项目开发进度。"
+      },
+      "微信图片_20261109162756_38_102.png": {
+        "width": 1907,
+        "height": 970,
+        "caption": "入党材料全流程界面",
+        "note": "界面截图，逐级解锁规则为业务规则，不是软件项目开发进度。"
+      },
+      "微信图片_20261109162757_39_102.png": {
+        "width": 1908,
+        "height": 918,
+        "caption": "思想汇报 12 框提交界面",
+        "note": "界面截图，已提交篇数为业务演示数据，不是软件项目开发进度。"
+      },
+      "截图-科技成果列表.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "科技成果页面：按领域与关键词查找可转化成果",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-企业需求列表.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "企业需求页面：企业技术需求与联系方式",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-管理后台统计.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "管理后台：成果、需求与发布趋势统计",
+        "note": "演示业务数据，不是软件项目开发进度。"
+      },
+      "截图-操作日志.png": {
+        "width": 1920,
+        "height": 932,
+        "caption": "操作日志：发布与权限变更留痕",
+        "note": "演示环境数据，不是软件项目开发进度。"
+      }
+    }
+  },
+  "projects": [
+    {
+      "id": "gaoxiao-dangzuzhi-guanli",
+      "name": "高校党组织管理平台项目介绍",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向高校党建工作的信息化管理系统，覆盖入党全流程与三类角色审批。",
+      "stageNote": "基于原型设计实现。文档未提供结构化阶段。",
+      "content": "高校党组织管理平台是一套面向高校党建工作的信息化管理系统，基于原型设计实现，采用前后端分离架构。后端使用 Spring Boot 3 + MySQL 构建纯 API 服务，运行于 8080 端口；前端采用 Vue 3 + Vite 开发，运行于 5173 端口，通过 Vite 代理完成接口与文件访问。系统同时适配 PC 端与移动端，界面响应式布局。\n\n系统围绕学生、支部书记、党委书记三类角色构建，采用 JWT 登录鉴权。学生使用身份证号登录，可进行注册、材料提交、查看邮件通知；支部书记负责审批、公示发布与培养人分配；党委书记拥有党员查询与存档权限。\n\n系统的核心是覆盖入党全流程的四阶段工作流：从入党积极分子（8 项材料）到发展对象（15 项材料）、接收预备党员（4 项材料）再到预备党员转正（9 项材料），各阶段逐级解锁，全程共七次审批。审批支持通过或驳回，驳回必须填写理由；关键环节设置满 18 周岁注册、绩点不合格拦截等校验。材料均以 PDF 形式上传、下载与在线浏览。\n\n除工作流外，系统还提供多项实用功能：党员信息批量导入/导出（Excel 模板按身份证号去重更新）；积极分子、发展对象、预备党员、正式党员四类分类管理与党关系转出登记；思想汇报按固定 12 框提交，实现连续三个月周期控制与超期提醒；学习心得不限篇数提交；入党积极分子在线考试内置共产党员网知识自测题库共 420 题，支持随机抽题、单选多选自动判分，60 分合格并保留逐题回顾与考试记录。\n\n此外，系统还具备待办事项、公示发布、铃铛消息通知与邮件中心等功能，实现了高校党组织管理全流程的数字化、规范化与便捷化。",
+      "dataNote": "文档未提供 status、progress、updatedAt、links 与结构化阶段；截图里的阶段计数、题目数与分数均为业务界面证据，不是软件项目开发进度。",
+      "links": [],
+      "sourceFiles": [
+        "../project/高校党组织管理平台项目介绍/高校党组织管理平台项目介绍.docx"
+      ],
+      "screenshots": [
+        "微信图片_20261109162755_36_102.jpg",
+        "微信图片_20261109162756_38_102.png",
+        "微信图片_20261109162757_39_102.png"
+      ]
+    },
+    {
+      "id": "keji-chengguo-zhuanhua",
+      "name": "科技成果转化平台项目介绍",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向学校与企业技术成果、需求对接的演示平台，含成果发布、需求发布与后台审计。",
+      "stageNote": "「主要功能都已经做完，眼下还在边开发边修」「平台还没有正式上线」",
+      "content": "这个平台就是给学校和企业搭个对接的平台：学校把老师的科技成果发上来，企业把想解决的技术问题提上来，双方互相看得见、能按领域查找，发布的内容由管理员把关，随时可以下架。\n\n项目 10 月 27 日开工，计划 11 月 13 日先做一场交付演示，主要功能都已经做完，眼下还在边开发边修：后台常用选项，比如技术领域这些，正在做成自己就能维护的页面，管理员和用户的权限也在细化，顺手修了改完角色页面不刷新、身份显示不对、点「我的发布」被带错地方这几处毛病，改完的都测过了，目前没发现大问题。\n\n平台还没有正式上线，现在挂在我服务器上的只是演示版，库里也全是虚拟数据：20 条科技成果、20 条企业技术需求，按 9 个技术领域分类，配了 24 张演示图片。\n\n正式上线还有一步：整个项目要落到企业名下，这件事已经跟科研处沟通过，材料他们正在准备；等企业资质、备案域名这些条件齐了，把演示数据换成真实数据，再按学校意见把登录方式改成企业微信，就能对外用了。",
+      "dataNote": "10 月 27 日、11 月 13 日为文档叙述日期；20 条科技成果、20 条企业技术需求、9 个技术领域、24 张演示图片均为演示业务数据。阶段叙述仅引用 DOCX 原话，百分比留空。",
+      "links": [],
+      "sourceFiles": [
+        "../project/科技成果转化平台项目介绍/产教融合服务平台项目介绍.docx"
+      ],
+      "screenshots": [
+        "截图-科技成果列表.png",
+        "截图-企业需求列表.png",
+        "截图-管理后台统计.png",
+        "截图-操作日志.png"
+      ]
+    },
+    {
+      "id": "keyan-xiangmu-shenbao",
+      "name": "科研项目申报系统简介",
+      "status": null,
+      "progress": null,
+      "updatedAt": null,
+      "stage": "文档未提供结构化阶段",
+      "summary": "面向科技局、科研单位与项目负责人的课题申报与审核业务平台。",
+      "stageNote": "「当前业务整体处于线下评审环节」",
+      "content": "科研项目申报系统供邯郸市科学技术局及全市科研单位、项目负责人使用，是集课题发布、线上填报、材料上传、单位筛选、归口分发、处室审核、二次确认、线下评审与合同签订于一体的业务平台，申报与审核过程全程留痕，并支持申报书 PDF 生成与导出。\n\n当前业务整体处于线下评审环节。系统现有 379 个申报个人、48 家单位、378 条申报书，其中 348 条已进入待线下评审状态；以下部分截图来源于本地环境。\n\n文档图注：图一 系统登录页；图二 总管理员的申请书审核页面（截图来源于本地环境）；图三 项目负责人的申请书填报页面（截图来源于本地环境）；图四 单位真实数据（开发环境）；图五 系统运行数据报表（截图来源于本地环境）。",
+      "dataNote": "379 个申报个人、48 家单位、378 条申报书、348 条待线下评审均为业务数据；当前业务整体处于线下评审环节为业务环节叙述。文档提到 5 张内嵌截图，项目目录未附外部截图文件，外部截图未提供。",
+      "links": [],
+      "sourceFiles": [
+        "../project/科研项目申报系统简介/科研项目申报系统简介.docx"
+      ],
+      "screenshots": []
+    }
+  ]
+}

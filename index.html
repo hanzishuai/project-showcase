@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>项目展示台账</title>
+<meta name="description" content="三个已提交资料的项目的单页台账：在做项目按模块列出已开发完毕与正在开发的功能，已做项目列出运行状态与业务数据。">
+<style>
+/* Hallmark · shape: workbench · genre: editorial · theme: Blueprint Ink (pinned) · surface: absolute · posture: restrained · hero: poster · nav: top rule with four section links · footer: flat colophon line · job: project portfolio ledger · draw: c1d8ee */
+:root{
+  --c1:#f7f6f2;
+  --c2:#16233a;
+  --c3:#2f5d8c;
+  --c4:#47536b;
+  --c5:#c7d8ee;
+  --c6:#aebbd0;
+  --c7:#e8b877;
+  --c8:#e6ecf5;
+  --c9:#cdd8e8;
+  --c10:#1e2c46;
+  --c11:#b6c4d8;
+  --c12:#1a2740;
+  --c13:#f7f6f2;
+  --c14:#f5dfb4;
+  --c15:#4d5668;
+  --c16:#c9d3e2;
+  --c17:#fbfaf7;
+  --c18:#dbe3ef;
+  --c19:#a9b8cf;
+  --c20:#202b3e;
+  --c21:#eef2f8;
+  --c22:#2b3a55;
+  --c23:#dfe6f0;
+  --font-body:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-display:"Songti SC","SimSun",Georgia,serif;
+  --rule:var(--c16);
+  --wash:var(--c17);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--c1);color:var(--c2);font-family:var(--font-body);font-size:16px;line-height:1.75;font-synthesis:none;-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%;height:auto}
+a{color:var(--c3);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:4px}
+a:active{opacity:.8}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--c3);outline-offset:2px}
+::selection{background:var(--c5);color:var(--c2)}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;color:var(--c2)}
+h1,h2{overflow-wrap:break-word;min-width:0}
+code.missing-value{font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit}
+
+.wrap{width:min(100% - 96px,1360px);margin-inline:auto}
+
+/* nav */
+.site-nav{position:sticky;top:0;z-index:20;background:var(--c1);border-bottom:2px solid var(--c2)}
+.nav-in{width:min(100% - 96px,1360px);margin-inline:auto;height:64px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{font-family:var(--font-display);font-size:19px;color:var(--c2);white-space:nowrap}
+.nav-links{display:flex;align-items:center;gap:24px}
+.nav-links a{font-size:14px;line-height:1.6;color:var(--c4)}
+.nav-links a:hover{color:var(--c3)}
+.nav-date{font-size:13px;line-height:1.6;color:var(--c15);white-space:nowrap}
+
+/* hero */
+.hero{border-bottom:1px solid var(--rule)}
+.hero-in{width:min(100% - 96px,1360px);margin-inline:auto;min-height:calc(100svh - 64px);display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);align-items:center;gap:64px;padding:64px 0 72px}
+.hero-main{min-width:0}
+.hero h1{margin:0 0 24px;font-size:clamp(44px,5.2vw,76px);line-height:1.08;text-wrap:balance}
+.hero-dek{margin:0 0 32px;max-width:36em;font-size:17px;line-height:1.9;color:var(--c4)}
+.hero-actions{display:flex;flex-wrap:wrap;gap:16px;margin:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 24px;font-family:var(--font-body);font-size:15px;line-height:1.5;border:1px solid var(--c3);background:var(--c3);color:var(--c1);border-radius:2px;transition:background-color .18s ease,color .18s ease,border-color .18s ease}
+.btn:hover{background:var(--c2);border-color:var(--c2);color:var(--c1);text-decoration:none}
+.btn.ghost{background:transparent;color:var(--c3)}
+.btn.ghost:hover{background:var(--c8);border-color:var(--c2);color:var(--c2)}
+.btn:active{background:var(--c2);border-color:var(--c2);color:var(--c1)}
+.btn:disabled{background:var(--c18);border-color:var(--c18);color:var(--c15);cursor:not-allowed}
+.hero-board{background:var(--wash);border:1px solid var(--rule);padding:32px;display:grid;gap:24px;align-content:center;min-width:0}
+.board-title{margin:0;font-size:13px;line-height:1.6;color:var(--c15)}
+.board-row{display:flex;align-items:baseline;justify-content:space-between;gap:24px;border-top:1px solid var(--c16);padding-top:16px}
+.board-num{font-family:var(--font-display);font-size:56px;line-height:1;color:var(--c3);font-variant-numeric:tabular-nums}
+.board-label{font-size:14px;line-height:1.6;color:var(--c4)}
+.board-foot{margin:0;padding-top:8px;font-size:13px;line-height:1.7;color:var(--c15)}
+
+/* sections */
+.section{padding:88px 0;border-top:1px solid var(--rule)}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding-bottom:24px;border-bottom:2px solid var(--c2);margin-bottom:40px}
+.sec-head h2{margin:0;font-size:clamp(30px,3.4vw,44px);line-height:1.15;font-weight:700}
+.sec-note{margin:0;font-size:14px;line-height:1.6;color:var(--c15);white-space:nowrap}
+.sec-intro{margin:0 0 40px;max-width:46em;font-size:15px;line-height:1.9;color:var(--c4)}
+
+/* overview */
+.table-scroll{width:100%;overflow-x:auto}
+.overview{width:100%;border-collapse:collapse;font-size:15px}
+.overview th{text-align:left;font-weight:400;font-size:13px;line-height:1.6;color:var(--c15);padding:0 24px 12px 0;border-bottom:1px solid var(--c16)}
+.overview td{padding:20px 24px 20px 0;border-bottom:1px solid var(--c16);vertical-align:top}
+.overview th:last-child,.overview td:last-child{padding-right:0}
+.overview .p-name{font-family:var(--font-display);font-size:19px;line-height:1.4;color:var(--c2)}
+.overview .p-note{display:block;margin-top:4px;font-size:13px;line-height:1.6;color:var(--c15)}
+.tag{display:inline-block;margin:0;padding:4px 12px;font-size:12px;line-height:1.6;font-weight:400;color:var(--c3);background:var(--c8);border:1px solid var(--c6);border-radius:2px;white-space:nowrap}
+.tag.wip{color:var(--c20);background:var(--c14);border-color:var(--c7)}
+.tag.done{color:var(--c1);background:var(--c3);border-color:var(--c3)}
+
+/* project */
+.project{padding:0}
+.project + .project{border-top:1px solid var(--rule);margin-top:72px;padding-top:40px}
+.project-head{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:24px;align-items:start}
+.project-no{margin:0;font-family:var(--font-display);font-size:40px;line-height:1;color:var(--c7)}
+.project-id{min-width:0}
+.project-id h3{margin:0 0 8px;font-size:clamp(24px,2.6vw,32px);line-height:1.25}
+.project-line{margin:0;font-size:15px;line-height:1.8;color:var(--c4)}
+.project-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin:24px 0 0;padding:20px 0;border-top:1px solid var(--c16);border-bottom:1px solid var(--c16)}
+.project-facts div{min-width:0}
+.project-facts dt{margin:0 0 4px;font-size:12px;line-height:1.6;color:var(--c15)}
+.project-facts dd{margin:0;font-size:14px;line-height:1.7;color:var(--c2)}
+
+/* modules */
+.modules{margin-top:24px;border-top:1px solid var(--c2)}
+.module{display:grid;grid-template-columns:220px minmax(0,1fr) minmax(0,1fr);gap:24px;padding:24px 0;border-bottom:1px solid var(--c16)}
+.module-head{min-width:0}
+.module-head h3{margin:0 0 4px;font-size:20px;line-height:1.35}
+.module-note{margin:0;font-size:13px;line-height:1.7;color:var(--c15)}
+.module-col{min-width:0}
+.col-label{margin:0 0 8px;font-size:12px;line-height:1.6;color:var(--c15)}
+.feature-list{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.feature-list li{position:relative;padding-left:16px;font-size:14px;line-height:1.75;color:var(--c2)}
+.feature-list li::before{content:"";position:absolute;left:0;top:.72em;width:6px;height:6px;background:var(--c7);border-radius:1px}
+.feature-list.plain li::before{background:var(--c6)}
+.empty-note{margin:0;font-size:14px;line-height:1.75;color:var(--c15)}
+.module-foot{margin:16px 0 0;font-size:13px;line-height:1.8;color:var(--c15)}
+
+/* gallery */
+.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:32px}
+.gallery.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.gallery figure{margin:0;border:1px solid var(--c16);background:var(--c17);padding:12px}
+.gallery img{width:100%;border:1px solid var(--c16)}
+.gallery figcaption{margin-top:8px;font-size:13px;line-height:1.7;color:var(--c15)}
+/* done project ledger */
+.ledger{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;margin-top:32px;padding:24px 0;border-top:1px solid var(--c2);border-bottom:1px solid var(--c2)}
+.ledger-item{min-width:0}
+.ledger-label{margin:0 0 8px;font-size:12px;line-height:1.6;color:var(--c15)}
+.ledger-value{margin:0;font-family:var(--font-display);font-size:32px;line-height:1.2;color:var(--c2)}
+.ledger-value.text{font-family:var(--font-body);font-size:17px;line-height:1.6}
+.ledger-note{margin:4px 0 0;font-size:12px;line-height:1.7;color:var(--c15)}
+.flow{list-style:none;margin:24px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.flow li{display:grid;grid-template-columns:32px minmax(0,1fr);gap:8px;align-items:baseline;border-top:2px solid var(--c16);padding-top:12px;font-size:14px;line-height:1.7}
+.flow-no{font-family:var(--font-display);font-size:18px;color:var(--c7)}
+.sub-head{margin:40px 0 0;font-size:20px;line-height:1.35}
+.cap-list{margin:16px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px 24px}
+.cap-list li{padding:8px 0;border-bottom:1px solid var(--c16);font-size:14px;line-height:1.7;color:var(--c4)}
+
+/* materials */
+.materials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:32px}
+.mat-block{border-top:1px solid var(--c2);padding-top:16px;min-width:0}
+.mat-block h3{margin:0 0 8px;font-size:20px;line-height:1.35}
+.mat-list{margin:0;padding:0;list-style:none;font-size:14px;line-height:1.75}
+.mat-list li{display:flex;justify-content:space-between;gap:24px;padding:8px 0;border-bottom:1px solid var(--c16)}
+.mat-key{color:var(--c4)}
+.mat-val{color:var(--c2);text-align:right}
+.placeholder{margin-top:32px;border:1px dashed var(--c6);background:var(--c17);padding:24px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.placeholder h3{margin:0 0 4px;font-size:20px;line-height:1.35}
+.placeholder p{margin:0;font-size:13px;line-height:1.8;color:var(--c4)}
+
+/* footer */
+.site-foot{border-top:2px solid var(--c2);margin-top:88px;padding:32px 0 48px}
+.foot-in{width:min(100% - 96px,1360px);margin-inline:auto;display:flex;justify-content:space-between;gap:24px;font-size:13px;line-height:1.8;color:var(--c15)}
+.foot-in p{margin:0}
+.foot-in a{white-space:nowrap}
+.foot-in .foot-brand{font-family:var(--font-display);font-size:16px;color:var(--c2)}
+
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hero-main > *{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+.hero-main > :nth-child(2){animation-delay:.06s}
+.hero-main > :nth-child(3){animation-delay:.12s}
+.hero-board{animation:rise .6s cubic-bezier(.2,.7,.2,1) both;animation-delay:.08s}
+
+@media (max-width:1024px){
+  .hero-in{grid-template-columns:minmax(0,1fr);gap:40px;min-height:auto;padding:56px 0 64px}
+  .hero-board{max-width:560px}
+  .project-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .module{grid-template-columns:minmax(0,1fr);gap:16px;padding:24px 0}
+  .ledger{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cap-list{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:720px){
+  .wrap,.nav-in,.hero-in,.foot-in{width:calc(100% - 40px)}
+  .nav-in{height:auto;flex-wrap:wrap;padding:12px 0;gap:8px 16px}
+  .nav-links{gap:16px}
+  .nav-date{display:none}
+  .section{padding:64px 0}
+  .sec-head{flex-direction:column;align-items:flex-start;gap:8px}
+  .sec-note{white-space:normal}
+  .project-head{grid-template-columns:minmax(0,1fr) auto;gap:16px}
+  .project-no{display:none}
+  .project-facts{grid-template-columns:minmax(0,1fr)}
+  .gallery,.gallery.three,.materials,.cap-list{grid-template-columns:minmax(0,1fr)}
+  .ledger{grid-template-columns:minmax(0,1fr)}
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .placeholder{flex-direction:column;align-items:flex-start}
+  .foot-in{flex-direction:column;gap:8px}
+  .overview{min-width:720px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .hero-main > *,.hero-board{animation:none}
+  .btn{transition:none}
+}
+</style>
+</head>
+<body id="top">
+
+<nav class="site-nav" aria-label="页面导航">
+  <div class="nav-in">
+    <span class="brand">项目展示台账</span>
+    <div class="nav-links">
+      <a href="#overview">总览</a>
+      <a href="#doing">在做</a>
+      <a href="#done">已做</a>
+      <a href="#materials">资料与口径</a>
+    </div>
+    <span class="nav-date">2026-11-10</span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="hero-main">
+      <h1>三个项目，一张台账</h1>
+      <p class="hero-dek">已提交资料的三个项目放在同一页。在做的项目按模块拆开，写明已经开发完毕和正在开发的功能；已做的项目列出运行状态与业务数据。文档没有提供的，页面留空。</p>
+      <p class="hero-actions">
+        <a class="btn" href="#doing">看在做的项目</a>
+        <a class="btn ghost" href="#done">看已做的项目</a>
+      </p>
+    </div>
+    <aside class="hero-board" aria-label="项目数量汇总">
+      <p class="board-title">项目数量</p>
+      <div class="board-row"><span class="board-num">3</span><span class="board-label">已提交资料的项目</span></div>
+      <div class="board-row"><span class="board-num">2</span><span class="board-label">在做</span></div>
+      <div class="board-row"><span class="board-num">1</span><span class="board-label">已做</span></div>
+      <p class="board-foot">开发者与指导老师文档未提供，显示为 <code class="missing-value">—</code>。</p>
+    </aside>
+  </div>
+</header>
+
+<main>
+
+<section class="section" id="overview">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>总览</h2>
+      <p class="sec-note">按项目资料原话整理</p>
+    </div>
+    <p class="sec-intro">归类按文档原话判断：明确写到还在开发、尚未上线的归入「在做」；写到已在真实业务中运转的归入「已做」；只写「基于原型设计实现」、没有上线与用户数据的，暂按在做展示。文档没有提供状态字段。</p>
+    <div class="table-scroll">
+      <table class="overview">
+        <thead>
+          <tr>
+            <th scope="col">项目</th>
+            <th scope="col">归类</th>
+            <th scope="col">开发者</th>
+            <th scope="col">指导老师</th>
+            <th scope="col">文档里的阶段原话</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a class="p-name" href="#project-dangzuzhi">高校党组织管理平台</a><span class="p-note">入党流程、党员管理、在线考试</span></td>
+            <td><span class="tag wip">在做</span></td>
+            <td><code class="missing-value">—</code></td>
+            <td><code class="missing-value">—</code></td>
+            <td>基于原型设计实现</td>
+          </tr>
+          <tr>
+            <td><a class="p-name" href="#project-keji">科技成果转化平台</a><span class="p-note">成果发布、企业需求、管理后台</span></td>
+            <td><span class="tag wip">在做</span></td>
+            <td><code class="missing-value">—</code></td>
+            <td><code class="missing-value">—</code></td>
+            <td>主要功能都已经做完，眼下还在边开发边修；平台还没有正式上线</td>
+          </tr>
+          <tr>
+            <td><a class="p-name" href="#project-keyan">科研项目申报系统</a><span class="p-note">课题发布、线上填报、线下评审</span></td>
+            <td><span class="tag done">已做</span></td>
+            <td><code class="missing-value">—</code></td>
+            <td><code class="missing-value">—</code></td>
+            <td>当前业务整体处于线下评审环节</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="doing">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>在做的项目</h2>
+      <p class="sec-note">2 个项目，按模块展开</p>
+    </div>
+    <p class="sec-intro">每个模块分两列：左边是文档写明已经开发完毕的功能，右边是文档写明正在开发的功能。没有写到的内容保持空位，不补写。</p>
+
+    <article class="project" id="project-keji">
+      <header class="project-head">
+        <p class="project-no">01</p>
+        <div class="project-id">
+          <h3>科技成果转化平台</h3>
+          <p class="project-line">文档原话：主要功能都已经做完，眼下还在边开发边修；平台还没有正式上线。</p>
+        </div>
+        <p class="tag wip">在做</p>
+      </header>
+      <dl class="project-facts">
+        <div><dt>开发者</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>指导老师</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>文档阶段</dt><dd>边开发边修，未上线</dd></div>
+        <div><dt>时间安排</dt><dd>10 月 27 日开工，计划 11 月 13 日交付演示</dd></div>
+      </dl>
+
+      <div class="modules">
+        <div class="module">
+          <div class="module-head">
+            <h3>科技成果</h3>
+            <p class="module-note">成果发布与检索</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>科技成果发布与维护</li>
+              <li>按技术领域查找成果</li>
+              <li>成果列表与详情展示</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>企业技术需求</h3>
+            <p class="module-note">需求发布与对接</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>企业技术需求发布</li>
+              <li>需求列表与详情展示</li>
+              <li>联系方式展示</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>管理后台</h3>
+            <p class="module-note">数据看板与操作留痕</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>成果、需求与发布趋势统计</li>
+              <li>操作日志留痕</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <ul class="feature-list plain">
+              <li>技术领域等常用选项做成自维护页面</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>角色与权限</h3>
+            <p class="module-note">三类角色页面</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>三类角色页面</li>
+              <li>角色页面不刷新、身份显示不对、「我的发布」跳转错误已修，改完的都测过了</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <ul class="feature-list plain">
+              <li>管理员与用户权限细化</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>上线准备</h3>
+            <p class="module-note">演示版已挂服务器</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>演示版部署在服务器，含 20 条科技成果、20 条企业技术需求、9 个技术领域、24 张演示图片</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <ul class="feature-list plain">
+              <li>落到企业名下，科研处准备资质与备案域名材料</li>
+              <li>真实数据替换</li>
+              <li>按学校意见改企业微信登录</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <p class="module-foot">上面列出的 20 条、20 条、9 个、24 张是演示环境里的数据，用来核对界面，不代表开发进度。</p>
+
+      <div class="gallery">
+        <figure><img src="assets/images/截图-科技成果列表.png" alt="科技成果列表界面截图" width="1920" height="932"><figcaption>科技成果列表</figcaption></figure>
+        <figure><img src="assets/images/截图-企业需求列表.png" alt="企业技术需求列表界面截图" width="1920" height="932"><figcaption>企业技术需求列表</figcaption></figure>
+        <figure><img src="assets/images/截图-管理后台统计.png" alt="管理后台统计界面截图" width="1920" height="932"><figcaption>管理后台统计</figcaption></figure>
+        <figure><img src="assets/images/截图-操作日志.png" alt="操作日志界面截图" width="1920" height="932"><figcaption>操作日志</figcaption></figure>
+      </div>
+    </article>
+
+    <article class="project" id="project-dangzuzhi">
+      <header class="project-head">
+        <p class="project-no">02</p>
+        <div class="project-id">
+          <h3>高校党组织管理平台</h3>
+          <p class="project-line">文档原话：基于原型设计实现。没有提到上线、用户或运行数据。</p>
+        </div>
+        <p class="tag wip">在做</p>
+      </header>
+      <dl class="project-facts">
+        <div><dt>开发者</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>指导老师</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>文档阶段</dt><dd>基于原型设计实现</dd></div>
+        <div><dt>时间安排</dt><dd><code class="missing-value">—</code></dd></div>
+      </dl>
+
+      <div class="modules">
+        <div class="module">
+          <div class="module-head">
+            <h3>账号与角色</h3>
+            <p class="module-note">三类角色与 JWT</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>学生、支部书记、党委书记三类角色</li>
+              <li>JWT 登录鉴权</li>
+              <li>学生以身份证号登录</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>入党流程</h3>
+            <p class="module-note">四阶段与七次审批</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>入党四个阶段，分别 8 / 15 / 4 / 9 项材料</li>
+              <li>材料逐级解锁</li>
+              <li>七次审批，驳回必须填写理由</li>
+              <li>满 18 周岁与绩点校验</li>
+              <li>PDF 材料上传、下载与在线浏览</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>党员管理</h3>
+            <p class="module-note">Excel 与党关系</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>党员 Excel 批量导入导出，按身份证号去重更新</li>
+              <li>四类分类管理</li>
+              <li>党关系转出登记</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>思想汇报</h3>
+            <p class="module-note">固定 12 框与三个月周期</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>固定 12 框提交</li>
+              <li>连续三个月周期与超期提醒</li>
+              <li>学习心得不限篇数</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>在线考试</h3>
+            <p class="module-note">420 题随机抽题</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>420 题题库</li>
+              <li>随机抽题</li>
+              <li>单选、多选自动判分，60 分合格</li>
+              <li>逐题回顾与考试记录</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>消息与公示</h3>
+            <p class="module-note">待办与通知</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>待办事项</li>
+              <li>公示发布</li>
+              <li>铃铛消息</li>
+              <li>邮件中心</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-head">
+            <h3>技术架构</h3>
+            <p class="module-note">前后端分离</p>
+          </div>
+          <div class="module-col">
+            <p class="col-label">已开发完毕</p>
+            <ul class="feature-list">
+              <li>Spring Boot 3 + MySQL 提供 8080 纯 API</li>
+              <li>Vue 3 + Vite 在 5173 代理</li>
+              <li>前后端分离</li>
+              <li>PC 与移动端响应式</li>
+            </ul>
+          </div>
+          <div class="module-col">
+            <p class="col-label">正在开发</p>
+            <p class="empty-note"><code class="missing-value">—</code></p>
+          </div>
+        </div>
+      </div>
+      <p class="module-foot">文档没有写正在开发的功能，所有模块的「正在开发」按实留空。</p>
+
+      <div class="gallery three">
+        <figure><img src="assets/images/微信图片_20261109162755_36_102.jpg" alt="高校党组织管理平台界面截图一" width="1897" height="959"><figcaption>平台界面截图一</figcaption></figure>
+        <figure><img src="assets/images/微信图片_20261109162756_38_102.png" alt="高校党组织管理平台界面截图二" width="1907" height="970"><figcaption>平台界面截图二</figcaption></figure>
+        <figure><img src="assets/images/微信图片_20261109162757_39_102.png" alt="高校党组织管理平台界面截图三" width="1908" height="918"><figcaption>平台界面截图三</figcaption></figure>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="section" id="done">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>已做的项目</h2>
+      <p class="sec-note">1 个项目，已在真实业务中运行</p>
+    </div>
+    <p class="sec-intro">使用人数、运行时长这类数据按文档口径呈现。文档没有给出的数字，页面显示为 <code class="missing-value">—</code>，不估算，也不用演示数据顶替。</p>
+
+    <article class="project" id="project-keyan">
+      <header class="project-head">
+        <p class="project-no">03</p>
+        <div class="project-id">
+          <h3>科研项目申报系统</h3>
+          <p class="project-line">文档原话：当前业务整体处于线下评审环节。使用方是邯郸市科学技术局及全市科研单位、项目负责人。</p>
+        </div>
+        <p class="tag done">已做</p>
+      </header>
+      <dl class="project-facts">
+        <div><dt>开发者</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>指导老师</dt><dd><code class="missing-value">—</code></dd></div>
+        <div><dt>使用方</dt><dd>邯郸市科学技术局及全市科研单位、项目负责人</dd></div>
+        <div><dt>当前环节</dt><dd>线下评审</dd></div>
+      </dl>
+
+      <div class="ledger">
+        <div class="ledger-item">
+          <p class="ledger-label">使用人数</p>
+          <p class="ledger-value"><code class="missing-value">—</code></p>
+          <p class="ledger-note">文档未提供实时用户数</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">运行时长</p>
+          <p class="ledger-value"><code class="missing-value">—</code></p>
+          <p class="ledger-note">文档未提供上线日期</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">申报个人</p>
+          <p class="ledger-value">379</p>
+          <p class="ledger-note">业务数据，不是实时用户数</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">申报单位</p>
+          <p class="ledger-value">48</p>
+          <p class="ledger-note">业务数据</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">申报书</p>
+          <p class="ledger-value">378</p>
+          <p class="ledger-note">业务数据</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">待线下评审</p>
+          <p class="ledger-value">348</p>
+          <p class="ledger-note">业务数据</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">运行状态</p>
+          <p class="ledger-value text">线下评审环节</p>
+          <p class="ledger-note">文档描述的业务现状</p>
+        </div>
+        <div class="ledger-item">
+          <p class="ledger-label">覆盖范围</p>
+          <p class="ledger-value text">市级科技局与全市科研单位</p>
+          <p class="ledger-note">含项目负责人</p>
+        </div>
+      </div>
+
+      <h3 class="sub-head">业务流程</h3>
+      <ol class="flow">
+        <li><span class="flow-no">01</span><span>课题发布</span></li>
+        <li><span class="flow-no">02</span><span>线上填报</span></li>
+        <li><span class="flow-no">03</span><span>材料上传</span></li>
+        <li><span class="flow-no">04</span><span>单位筛选</span></li>
+        <li><span class="flow-no">05</span><span>归口分发</span></li>
+        <li><span class="flow-no">06</span><span>处室审核</span></li>
+        <li><span class="flow-no">07</span><span>二次确认</span></li>
+        <li><span class="flow-no">08</span><span>线下评审</span></li>
+        <li><span class="flow-no">09</span><span>合同签订</span></li>
+      </ol>
+
+      <h3 class="sub-head">系统能力</h3>
+      <ul class="feature-list">
+        <li>申报全程留痕</li>
+        <li>申报书 PDF 生成导出</li>
+        <li>按单位与归口分发申报书</li>
+        <li>处室审核与二次确认</li>
+      </ul>
+
+      <h3 class="sub-head">文档截图说明</h3>
+      <p class="module-foot">文档正文提到 5 张截图，截图文件没有随文档提供，页面不引用占位图。</p>
+      <ul class="cap-list">
+        <li>登录页 <code class="missing-value">—</code></li>
+        <li>管理员审核 <code class="missing-value">—</code></li>
+        <li>项目负责人填报 <code class="missing-value">—</code></li>
+        <li>单位真实数据 <code class="missing-value">—</code></li>
+        <li>运行数据报表 <code class="missing-value">—</code></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="section" id="materials">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>资料与口径</h2>
+      <p class="sec-note">数据源与缺项清单</p>
+    </div>
+    <p class="sec-intro">页面内容来自 data/projects.json 和三份项目介绍文档。字段为空的地方统一显示 <code class="missing-value">—</code>，不按截图推算，不写没有出处的数字。</p>
+    <div class="materials">
+      <div class="mat-block">
+        <h3>文档没有提供的字段</h3>
+        <ul class="mat-list">
+          <li><span class="mat-key">开发者</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+          <li><span class="mat-key">指导老师</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+          <li><span class="mat-key">项目状态</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+          <li><span class="mat-key">进度百分比</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+          <li><span class="mat-key">更新时间</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+          <li><span class="mat-key">项目链接</span><span class="mat-val"><code class="missing-value">—</code></span></li>
+        </ul>
+      </div>
+      <div class="mat-block">
+        <h3>素材清点</h3>
+        <ul class="mat-list">
+          <li><span class="mat-key">项目文件夹</span><span class="mat-val">3 个</span></li>
+          <li><span class="mat-key">项目介绍文档</span><span class="mat-val">3 份 DOCX</span></li>
+          <li><span class="mat-key">界面截图</span><span class="mat-val">7 张</span></li>
+          <li><span class="mat-key">未整理素材</span><span class="mat-val">送货小车 2 个视频与 1 张图片</span></li>
+          <li><span class="mat-key">未整理素材</span><span class="mat-val">采摘机 2 个视频</span></li>
+          <li><span class="mat-key">未整理素材</span><span class="mat-val">项目资料.7z</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="placeholder">
+      <div>
+        <h3>资料待上传</h3>
+        <p>还有项目没有提交资料，补齐后按同样的分块放进这一页，不预先填写项目名与数字。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="foot-in">
+    <p class="foot-brand">项目展示台账</p>
+    <p>数据源：data/projects.json</p>
+    <p>口径日期：2026-11-10</p>
+    <p>纯前端静态页，不连接后端</p>
+    <p><a href="#top">回到顶部</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
