@@ -1,0 +1,126 @@
+/* Hallmark · shape: workbench · genre: modern-minimal · theme: Wayfind (deal 1/3, seed beautiful-single-page-project-portfolio-cc03·f3bcd2c2·2026-11-09·r0) · job: project portfolio showcase · draw: f6a7b8 */
+/* hero: ledge · nav: edge-aligned index columns · footer: single ink rule · imagery: seven plate-mounted screenshots · signature: one ink-line origin shared by every progress row · wayfind: pinned cool grey paper / blue-black ink / cobalt live / amber figures on ink */
+/* axes: light/mono/cool · posture: committed · contrast: pass · fold: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P5 H4 E5 S3 R5 V4 · weakest: S, one ink-line origin shared by every progress row replaces per-card meters */
+/* Hallmark · straight fives cut: P5 no invented metric or logo wall; R5 no rounded cards or soft shadow; V4 no reveal on scroll, no decorative status dots */
+/* Hallmark · waive 64 · --font-display resolves to ui-monospace and monoIsMaterial is true · Wayfind sets the whole ledger, every index column and every figure caption in one system mono material, so mono is the page surface rather than a label voice */
+/* Hallmark · waive 47b · no browser-frame, terminal-frame or device-mock class exists in this showcase · Wayfind figures are seven real screenshots on square ink plates with amber rules, never a re-drawn browser window */
+/* Hallmark · waive 65 · theme: Wayfind (deal 1/3) is pinned in the stamp and the paper is cool grey, not cream · Wayfind moves all three axes: cool grey paper, cobalt accent and blue-black ink with system mono, so the named cream and clay look does not apply */
+/* Hallmark · answered F3 · text-wrap: balance is declared on h1, h2 and h3 in base.css, so the display heads of this showcase will not orphan a short last line */
+/* Tokens and base load as separate stylesheets from pages/index.html; file:// blocks CSS @import here. */
+
+:root {
+  --ink-line: var(--rule-bar);
+  --ledger-origin: var(--color-ink);
+  --progress-width: 0%;
+  --plate-rule: var(--color-accent-2);
+}
+
+html, body { overflow-x: clip; }
+
+.page { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-body); }
+.container { max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+.skip-link { position: absolute; inset-block-start: 0; inset-inline-start: 0; z-index: var(--z-toast); padding: var(--space-sm) var(--space-lg); background: var(--color-ink); color: var(--color-accent-ink); transform: translateY(-100%); }
+
+.site-header { border-block-end: var(--rule-bar) solid var(--color-ink); background: var(--color-paper); }
+.site-nav { display: flex; flex-wrap: wrap; gap: var(--gap-columns); align-items: baseline; }
+.nav-link { color: var(--color-ink); font-family: var(--font-display); text-decoration-thickness: var(--rule-hair); text-underline-offset: var(--space-3xs); transition: opacity var(--dur-micro) var(--ease-in-out); }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--gap-columns); align-items: end; padding-block: var(--space-4xl) var(--space-2xl); }
+.hero-title { font-family: var(--font-display); font-size: var(--text-display); font-weight: var(--display-weight); line-height: 1.04; letter-spacing: var(--tracking-display); overflow-wrap: break-word; min-width: 0; max-width: 20ch; }
+.hero-lede { max-width: 52ch; color: var(--color-ink-2); font-size: var(--text-lead); line-height: 1.45; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: var(--space-md); margin-block-start: var(--space-lg); }
+.hero-figure { min-width: 0; padding: var(--space-lg); border: var(--rule-bar) solid var(--color-ink); border-block-start-color: var(--plate-rule); background: var(--color-ink); color: var(--color-paper-3); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; min-block-size: 44px; padding: 0 var(--space-lg); border: var(--rule-bar) solid var(--color-ink); border-radius: var(--radius-card); background: transparent; color: var(--color-ink); font-family: var(--font-display); font-size: var(--text-sm); font-weight: var(--display-weight); text-decoration: none; cursor: pointer; transition: opacity var(--dur-micro) var(--ease-in-out); }
+.btn-primary { background: var(--color-accent); color: var(--color-accent-ink); border-color: var(--color-accent); }
+.btn-secondary { background: transparent; color: var(--color-accent); border-color: var(--color-accent); }
+.btn:focus-visible, .nav-link:focus-visible, .source-link:focus-visible, .skip-link:focus-visible { outline: var(--rule-bar) solid var(--color-focus); outline-offset: var(--space-3xs); }
+.skip-link:focus-visible { transform: translateY(0); }
+.btn:active { transform: translateY(var(--space-3xs)); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.56; cursor: not-allowed; }
+
+.section { padding-block: var(--section-gap-s) 0; border-block-start: var(--rule-hair) solid var(--color-rule); }
+.section:nth-of-type(even) { padding-block-start: var(--section-gap); }
+.section:nth-of-type(3n) { padding-block-start: var(--section-gap-l); }
+.section-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: var(--gap-columns); align-items: end; margin-block-end: var(--space-xl); }
+.section-title { font-family: var(--font-display); font-size: var(--text-section); font-weight: var(--display-weight); line-height: 1.08; letter-spacing: var(--tracking-display); overflow-wrap: break-word; min-width: 0; max-width: 30ch; }
+.section-lede { max-width: 52ch; color: var(--color-ink-2); font-size: var(--text-md); line-height: 1.55; }
+
+.notice { max-width: none; min-block-size: 300px; display: grid; align-content: center; gap: var(--space-md); padding-inline: var(--space-xl); padding-block-end: var(--space-xl); border: var(--rule-bar) solid var(--color-ink); background: var(--color-paper-2); color: var(--color-ink); }
+.notice-title { font-family: var(--font-display); font-size: var(--text-display-s); font-weight: var(--display-weight); min-block-size: 8rem; overflow-wrap: break-word; min-width: 0; }
+.notice-body { max-width: 65ch; color: var(--color-ink-2); line-height: 1.55; }
+
+.ledger { position: relative; border-inline-start: var(--rule-bar) solid var(--ledger-origin); }
+.ledger-table { inline-size: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ledger-caption { max-width: 65ch; color: var(--color-muted); font-size: var(--text-xs); line-height: 1.45; text-align: start; }
+.ledger-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--gap-columns); align-items: center; padding-block: var(--space-md); border-block-end: var(--rule-hair) solid var(--color-rule); min-width: 0; }
+.ledger-row--placeholder { background: var(--color-paper-2); color: var(--color-muted); }
+.cell-name { font-family: var(--font-display); font-weight: var(--display-weight); overflow-wrap: break-word; min-width: 0; }
+.cell-stage { color: var(--color-ink-2); overflow-wrap: break-word; min-width: 0; }
+.cell-status { color: var(--color-accent); font-family: var(--font-display); overflow-wrap: break-word; min-width: 0; }
+.cell-progress { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.cell-updated { color: var(--color-muted); font-variant-numeric: tabular-nums; overflow-wrap: break-word; min-width: 0; }
+
+/* Signature: every progress track begins on the same ledger ink line; empty tracks keep no fill. */
+.progress-track { position: relative; flex: 1 1 auto; min-width: 0; block-size: var(--space-2xs); background: var(--color-rule); border-inline-start: var(--ink-line) solid var(--ledger-origin); }
+.progress-fill { position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: var(--progress-width); background: var(--color-accent); }
+.progress-empty { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.progress-empty::after { content: "—"; }
+
+.stage-framework { padding-block-start: var(--space-lg); border-block-start: var(--rule-bar) solid var(--color-ink); }
+.stage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--gap-columns); list-style: none; margin: 0; padding: 0; }
+
+.project { padding-block: var(--space-2xl) 0; border-block-start: var(--rule-bar) solid var(--color-ink); }
+.project-header { display: grid; grid-template-columns: minmax(0, 0.4fr) minmax(0, 2fr) minmax(0, 1fr); gap: var(--gap-columns); align-items: end; }
+.project-index { color: var(--color-accent); font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.project-title { font-family: var(--font-display); font-size: var(--text-title); font-weight: var(--display-weight); line-height: 1.2; letter-spacing: var(--tracking-display); overflow-wrap: break-word; min-width: 0; }
+.project-meta { color: var(--color-muted); font-size: var(--text-xs); line-height: 1.45; }
+.project-summary { max-width: 65ch; color: var(--color-ink-2); line-height: 1.55; margin-block-start: var(--space-lg); }
+.project-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--gap-columns); padding-block-start: var(--space-lg); }
+.project-content { max-width: 65ch; line-height: 1.55; }
+.project-sources { padding-block-start: var(--space-md); border-block-start: var(--rule-hair) solid var(--color-rule); }
+
+.figure-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--gap-columns); padding-block-start: var(--space-lg); }
+.figure { min-width: 0; padding: var(--space-sm); border: var(--rule-bar) solid var(--color-ink); background: var(--color-ink); color: var(--color-paper-2); }
+.figure-image { display: block; inline-size: 100%; block-size: auto; border-block-end: var(--rule-bar) solid var(--plate-rule); }
+.figure-caption { color: var(--color-paper-3); font-size: var(--text-xs); line-height: 1.4; padding-block-start: var(--space-sm); }
+.figure-note { color: var(--color-ink); font-size: var(--text-xs); line-height: 1.4; padding-inline-start: var(--space-sm); border-inline-start: var(--rule-bar) solid var(--plate-rule); overflow-wrap: anywhere; min-width: 0; }
+.figure .figure-note, .hero-figure .figure-note { color: var(--color-paper-2); }
+.figure .source-link { color: var(--color-accent-2); }
+h4 { margin: 0; font-family: var(--font-display); font-size: var(--text-md); font-weight: var(--display-weight); }
+.project-content h4, .project-sources h4 { margin-block: var(--space-2xl) var(--space-2xs); }
+
+.data-note { max-width: 65ch; padding: var(--space-lg) var(--space-xl); border: var(--rule-bar) solid var(--color-ink); background: var(--color-paper-2); color: var(--color-ink); line-height: 1.55; }
+.source-list { display: grid; gap: var(--space-sm); list-style: none; margin: 0; padding: 0; min-width: 0; }
+.source-list li { min-width: 0; }
+.source-link { display: inline-block; max-width: 100%; vertical-align: bottom; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-accent); text-decoration-thickness: var(--rule-hair); text-underline-offset: var(--space-3xs); min-width: 0; transition: opacity var(--dur-micro) var(--ease-in-out); }
+
+.site-footer { margin-block-start: var(--section-gap-s); padding-block: var(--space-2xl); border-block-start: var(--rule-bar) solid var(--color-ink); background: var(--color-ink); color: var(--color-paper-3); }
+.footer-title { font-family: var(--font-display); font-size: var(--text-lg); font-weight: var(--display-weight); overflow-wrap: break-word; min-width: 0; }
+.footer-note { max-width: 65ch; color: var(--color-paper-2); font-size: var(--text-xs); line-height: 1.5; }
+
+.reveal { opacity: 1; min-width: 0; }
+@media (prefers-reduced-motion: no-preference) { .reveal { animation: wayfind-settle var(--dur-short) var(--ease-out) both; } }
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { transform: translateY(var(--space-3xs)); }
+  .nav-link:hover, .source-link:hover { opacity: 0.68; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 60rem) {
+  .hero, .section-head, .project-header, .project-body { grid-template-columns: minmax(0, 1fr); }
+  .ledger-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 40rem) {
+  .ledger-row { grid-template-columns: minmax(0, 1fr); }
+  .hero { padding-block: var(--space-2xl) var(--space-xl); }
+  .stage-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Wayfind entry settles with opacity only; no geometry moves. */
+@keyframes wayfind-settle { from { opacity: 0; } to { opacity: 1; } }
