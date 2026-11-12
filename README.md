@@ -104,7 +104,7 @@ project-showcase/
 ## 实验分支：可操控界面的数字人 Agent
 
 分支 `feat/agent-ui-control`（不影响 main）。数字人除了回答问题，还能听懂「打开管理后台」「只看张三的项目」「看下一张图」这类话并直接操作界面：
-LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作总线执行（8 个只读动作，不执行任何写操作）。
+LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作总线执行（9 个只读动作，不执行任何写操作）。
 
 - 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
 - 自测：`node scripts/agent-selftest.mjs`（35 条指令用例）、`node scripts/agent-ui-selftest.mjs`（13 项浏览器 DOM 断言）。
