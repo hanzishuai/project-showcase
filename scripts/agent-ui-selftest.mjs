@@ -75,6 +75,8 @@ try {
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     '--hide-scrollbars', '--window-size=1920,1080',
     '--autoplay-policy=no-user-gesture-required',
+    '--use-fake-ui-for-media-stream',
+    '--use-fake-device-for-media-stream',
     '--remote-debugging-port=' + String(port),
     '--user-data-dir=' + profileDir,
     BASE + '/'
@@ -238,8 +240,36 @@ try {
   record('返回看板', s6.hash === '#/' && s6.board, JSON.stringify({ hash: s6.hash, board: s6.board }))
   record('浮层重新贴合', !!s6.dock && !!s6.stage && s6.dock.x === s6.stage.x, JSON.stringify({ dock: s6.dock, stage: s6.stage }))
 
+  // 7.5 播报中打断：点麦克风应停止播报并开始录音
+  await ask('帮我把这个系统讲一遍，从头开始', 1000)
+  let speakingSeen = false
+  for (let i = 0; i < 20; i += 1) {
+    await sleep(500)
+    const status = await evaluate(`(document.querySelector('.pp7-chat-header__status')||{}).textContent || ''`)
+    if (status.includes('正在播报')) { speakingSeen = true; break }
+  }
+  record('长回答进入播报状态', speakingSeen, '未观察到播报状态')
+  await evaluate(`document.querySelector('.pp7-chat-mic').click()`)
+  await sleep(1200)
+  const sBarge = await evaluate(`(() => ({
+    status: (document.querySelector('.pp7-chat-header__status')||{}).textContent || '',
+    recording: !!document.querySelector('.pp7-chat-recording')
+  }))()`)
+  record('播报中点麦克风打断并录音', !sBarge.status.includes('正在播报') && sBarge.recording, JSON.stringify(sBarge))
+  // 结束录音，等状态回落，避免影响后续步骤
+  await evaluate(`(() => { const m = document.querySelector('.pp7-chat-mic'); if (m && m.className.includes('is-recording')) m.click(); return true; })()`)
+  await sleep(4000)
+  await evaluate(`(() => { const b = document.querySelector('.pp7-chat-action'); if (b && b.textContent.includes('打断')) b.click(); return true; })()`)
+  await sleep(1500)
+
   // 8. 刷新后仍记得上下文（历史持久化在 sessionStorage）
   await ask('学术讲座预约平台有多少用户？', 5000)
+  let beforeReload = await state()
+  if (!beforeReload.lastReply.includes('1260')) {
+    await ask('学术讲座预约平台有多少用户？', 5000)
+    beforeReload = await state()
+  }
+  record('刷新前上下文已就位', beforeReload.lastReply.includes('1260'), beforeReload.lastReply.slice(0, 40))
   await send('Page.reload')
   await sleep(8000)
   await ask('刚才那个项目叫什么来着？', 5000)

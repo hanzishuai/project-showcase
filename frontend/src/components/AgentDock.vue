@@ -1,5 +1,12 @@
 <template>
-  <div v-show="!uiState.modalOpen" ref="dockEl" class="agent-dock" :class="{ 'is-collapsed': collapsed }" :style="dockStyle">
+  <div
+    v-show="!uiState.modalOpen"
+    ref="dockEl"
+    class="agent-dock"
+    :class="{ 'is-collapsed': collapsed }"
+    :style="dockStyle"
+    @click.capture="onClickCapture"
+  >
     <RagAvatar
       ref="avatarRef"
       v-show="!collapsed"
@@ -63,7 +70,14 @@ import { uiState } from '../agent/uiState'
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
 const dockEl = ref<HTMLDivElement | null>(null)
-const avatarRef = ref<{ chat?: { messages?: { value: unknown[] } } } | null>(null)
+interface ChatLike {
+  messages?: { value: unknown[] }
+  busy?: { value: boolean }
+  speaking?: { value: boolean }
+  interrupt?: () => void
+}
+
+const avatarRef = ref<{ chat?: ChatLike } | null>(null)
 // 直接打开后台/编辑页时也默认收起（不依赖页面切换事件）
 const collapsed = ref(props.page !== 'kanban')
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
@@ -135,6 +149,20 @@ const observeApp = () => {
 }
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
+
+/**
+ * 语音打断（barge-in）：数字人还在播报或回答时点麦克风，先中断当前回答，
+ * 再开始录音——否则麦克风会把数字人自己的声音录进去。
+ */
+const onClickCapture = (event: MouseEvent): void => {
+  const target = event.target as HTMLElement | null
+  if (!target || !target.closest('.pp7-chat-mic')) return
+  const chat = avatarRef.value?.chat
+  if (!chat?.interrupt) return
+  if (chat.speaking?.value || chat.busy?.value) {
+    chat.interrupt()
+  }
+}
 
 watch(
   () => props.page,
