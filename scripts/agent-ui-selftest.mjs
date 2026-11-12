@@ -107,6 +107,18 @@ try {
     await sleep(wait)
   }
 
+  const askExpect = async (question, check, options = {}) => {
+    const wait = options.wait ?? 4500
+    await ask(question, wait)
+    let snapshot = await state()
+    if (check(snapshot)) return snapshot
+    // 模型有随机性：再来一次
+    await sleep(600)
+    await ask(question, wait)
+    snapshot = await state()
+    return snapshot
+  }
+
   const state = () =>
     evaluate(`(() => {
       const visible = (el) => !!el && getComputedStyle(el).display !== 'none';
@@ -156,9 +168,11 @@ try {
   const s3 = await state()
   record('详情抽屉打开', s3.drawerOpen, JSON.stringify(s3.drawerOpen))
 
-  // 5. 跳后台 + 页签
-  await ask('打开管理后台的知识库页面', 4500)
-  const s4 = await state()
+  // 4.5 关抽屉 + 清筛选（后续步骤要求看得到全部项目）
+  await ask('把详情关了，然后显示全部项目', 3500)
+
+  // 5. 跳后台 + 页签（带一次重试）
+  const s4 = await askExpect('打开管理后台的知识库页面', (snap) => snap.hash === '#/admin' && snap.admin, { wait: 4500 })
   record('跳到管理后台', s4.hash === '#/admin' && s4.admin, JSON.stringify({ hash: s4.hash, admin: s4.admin }))
   record('知识库页签高亮', s4.adminTab.includes('知识库'), s4.adminTab)
   record('后台浮层仍在', !!s4.dock && s4.dock.w === 380, JSON.stringify(s4.dock))
@@ -176,12 +190,18 @@ try {
   record('看板事实问答不弹详情', !sFact.drawerOpen, JSON.stringify({ drawer: sFact.drawerOpen }))
   record('回答包含阶段信息', sFact.lastReply.includes('开发') || sFact.lastReply.includes('v1.2'), sFact.lastReply.slice(0, 40))
 
-  // 6.55 复合指令：动作 + 同时回答
-  await ask('打开学术讲座预约平台，顺便说说它有多少用户', 4500)
-  const sCompound = await state()
+  // 6.55 复合指令：动作 + 同时回答（此时无筛选）
+  await ask('显示全部项目', 2500)
+  const sCompound = await askExpect('打开学术讲座预约平台，顺便说说它有多少用户', (snap) => snap.drawerOpen, { wait: 4500 })
   record('复合指令执行了动作', sCompound.drawerOpen, JSON.stringify({ drawer: sCompound.drawerOpen }))
   record('复合指令同时回答了数据', sCompound.lastReply.includes('1260'), sCompound.lastReply.slice(0, 50))
   await ask('把详情关了', 2500)
+
+  // 6.58 动作失败：由数字人开口解释，而不是弹 toast
+  await evaluate(`window.__agentDispatchAction({ tool: 'open_project', args: { project: '不存在的项目' } })`)
+  await sleep(800)
+  const sFail = await state()
+  record('动作失败由数字人解释', sFail.lastReply.includes('没找到'), sFail.lastReply.slice(0, 30))
 
   // 6.6 窗口缩放后浮层仍贴合
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })

@@ -11,6 +11,13 @@ export interface AgentAction {
   args: Record<string, unknown>
 }
 
+/** 动作失败时交给数字人亲口说（由 AgentDock 注册） */
+let failureHandler: ((text: string) => void) | null = null
+
+export function setActionFailureHandler(handler: ((text: string) => void) | null): void {
+  failureHandler = handler
+}
+
 /** 动作执行失败时给用户的一句人话 */
 const FAILURE_TEXT: Record<string, string> = {
   open_project: '没找到这个项目，看看名字对不对？',
@@ -39,7 +46,10 @@ function run(action: AgentAction): boolean {
     if (typeof result === 'string' && result) {
       Message.success({ content: result, duration: 2200 })
     } else if (result === false) {
-      Message.warning(FAILURE_TEXT[action.tool] ?? '这个操作没完成')
+      const text = FAILURE_TEXT[action.tool] ?? '这个操作没完成'
+      // 优先让数字人说出来，其次才用 toast
+      if (failureHandler) failureHandler(text)
+      else Message.warning(text)
     }
     return true
   } catch (error) {
@@ -59,6 +69,11 @@ function flushPending(): void {
   if (pending.length > 0) {
     retryTimer = setTimeout(flushPending, 150)
   }
+}
+
+// 方便调试/自测：在浏览器控制台直接派发动作
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__agentDispatchAction = dispatchAction
 }
 
 let waited = 0

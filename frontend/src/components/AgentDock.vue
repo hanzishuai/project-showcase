@@ -1,6 +1,7 @@
 <template>
   <div v-show="!uiState.modalOpen" ref="dockEl" class="agent-dock" :class="{ 'is-collapsed': collapsed }" :style="dockStyle">
     <RagAvatar
+      ref="avatarRef"
       v-show="!collapsed"
       api-base-url=""
       :fetch="agentFetch"
@@ -56,11 +57,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
 import { agentFetch } from '../agent/fetch'
+import { setActionFailureHandler } from '../agent/bus'
 import { uiState } from '../agent/uiState'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
 const dockEl = ref<HTMLDivElement | null>(null)
+const avatarRef = ref<{ chat?: { messages?: { value: unknown[] } } } | null>(null)
 const collapsed = ref(false)
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight })
@@ -146,6 +149,17 @@ watch(
 )
 
 onMounted(() => {
+  // 动作执行失败时，让数字人自己说一句，而不是只弹 toast
+  setActionFailureHandler((text) => {
+    const messages = avatarRef.value?.chat?.messages
+    if (!messages) return
+    messages.value.push({
+      id: 'agent-fail-' + Date.now(),
+      role: 'assistant',
+      content: text,
+      createdAt: Date.now()
+    })
+  })
   measure()
   observeApp()
   window.addEventListener('resize', measure)
@@ -154,6 +168,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  setActionFailureHandler(null)
   window.removeEventListener('resize', measure)
   appObserver?.disconnect()
   cancelAnimationFrame(rafId)
