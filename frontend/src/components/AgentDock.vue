@@ -28,6 +28,19 @@
       @error="onError"
     />
 
+    <!-- 语音唤醒开关 -->
+    <button
+      type="button"
+      class="agent-dock__wake"
+      :class="{ 'is-on': wakeOn }"
+      :title="wakeOn ? '关闭语音唤醒' : '开启语音唤醒：说「' + wakePhrase + '」'"
+      :aria-label="wakeOn ? '关闭语音唤醒' : '开启语音唤醒'"
+      @click="toggleWake"
+    >
+      <span class="agent-dock__wake-icon">🎧</span>
+      <span v-if="wakeOn" class="agent-dock__wake-label">{{ wakeLabel }}</span>
+    </button>
+
     <!-- 收起 / 展开（看板页不使用：那里是页面布局的一部分） -->
     <button
       v-if="!isBoard"
@@ -62,9 +75,11 @@
  * - 全屏灯箱打开时隐藏，避免压在遮罩上。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
 import { agentFetch } from '../agent/fetch'
 import { setActionFailureHandler } from '../agent/bus'
+import { createWakeWordDetector, getWakePhrase, type WakeStatus } from '../agent/wake'
 import { uiState } from '../agent/uiState'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
@@ -78,6 +93,10 @@ interface ChatLike {
 }
 
 const avatarRef = ref<{ chat?: ChatLike } | null>(null)
+const wakeOn = ref(false)
+const wakeStatus = ref<WakeStatus>('off')
+const wakePhrase = ref(getWakePhrase())
+let wakeDetector: ReturnType<typeof createWakeWordDetector> | null = null
 // 直接打开后台/编辑页时也默认收起（不依赖页面切换事件）
 const collapsed = ref(props.page !== 'kanban')
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
@@ -150,6 +169,56 @@ const observeApp = () => {
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
 
+const wakeLabel = computed(() => {
+  switch (wakeStatus.value) {
+    case 'listening':
+      return '在听「' + wakePhrase.value + '」'
+    case 'speech':
+      return '听到了…'
+    case 'transcribing':
+      return '识别中…'
+    case 'detected':
+      return '我在'
+    case 'error':
+      return '麦克风不可用'
+    default:
+      return ''
+  }
+})
+
+const toggleWake = (): void => {
+  if (wakeOn.value) {
+    wakeDetector?.stop()
+    wakeDetector = null
+    wakeOn.value = false
+    wakeStatus.value = 'off'
+    return
+  }
+  const detector = createWakeWordDetector({
+    phrase: wakePhrase.value,
+    shouldPause: () => {
+      const chat = avatarRef.value?.chat
+      if (chat?.busy?.value || chat?.speaking?.value) return true
+      return !!dockEl.value?.querySelector('.pp7-chat-recording')
+    },
+    onStatus: (status) => {
+      wakeStatus.value = status
+    },
+    onWake: () => {
+      // 唤醒后展开面板并把麦克风交给数字人，等用户直接说指令
+      collapsed.value = false
+      Message.success({ content: '我在，请说', duration: 1800 })
+      setTimeout(() => {
+        const mic = dockEl.value?.querySelector('.pp7-chat-mic') as HTMLButtonElement | null
+        if (mic && !mic.disabled) mic.click()
+      }, 260)
+    }
+  })
+  wakeDetector = detector
+  wakeOn.value = true
+  void detector.start()
+}
+
 /**
  * 语音打断（barge-in）：数字人还在播报或回答时点麦克风，先中断当前回答，
  * 再开始录音——否则麦克风会把数字人自己的声音录进去。
@@ -198,6 +267,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  wakeDetector?.stop()
+  wakeDetector = null
   setActionFailureHandler(null)
   window.removeEventListener('resize', measure)
   appObserver?.disconnect()

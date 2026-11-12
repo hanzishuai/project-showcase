@@ -222,3 +222,30 @@
 }
 .agent-dock__bubble:hover{transform:scale(1.05);border-color:rgba(34,211,238,.9)}
 .agent-dock__bubble img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+
+/* 语音唤醒开关 */
+.agent-dock__wake{
+  position:absolute;
+  top:6px;
+  right:42px;
+  z-index:4;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  height:26px;
+  padding:0 8px;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:8px;
+  background:rgba(18,24,38,.9);
+  color:#8B98AD;
+  font-size:11px;
+  line-height:1;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.agent-dock__wake:hover{color:#E6EDF7;border-color:rgba(34,211,238,.5)}
+.agent-dock__wake.is-on{color:#22D3EE;border-color:rgba(34,211,238,.55);background:rgba(18,38,48,.92)}
+.agent-dock__wake-icon{font-size:12px}
+.agent-dock__wake-label{white-space:nowrap}
+.agent-dock.is-collapsed .agent-dock__wake{top:-10px;right:22px;border-radius:50%;width:26px;padding:0;justify-content:center}
+.agent-dock.is-collapsed .agent-dock__wake-label{display:none}
