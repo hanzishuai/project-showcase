@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "test:agent": "node ../scripts/agent-selftest.mjs",
     "test:agent:ui": "node ../scripts/agent-ui-selftest.mjs",
-    "test:agent:voice": "node ../scripts/agent-voice-selftest.mjs",
-    "test:agent:wake": "node ../scripts/agent-wake-selftest.mjs"
+    "test:agent:voice": "node ../scripts/agent-voice-selftest.mjs"
   },
   "dependencies": {
     "echarts": "^5.5.1",

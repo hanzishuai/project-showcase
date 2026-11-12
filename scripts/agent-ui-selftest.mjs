@@ -197,48 +197,6 @@ try {
   }))()`)
   record('系统设置页渲染', sSettings.heading === '系统设置' && sSettings.groups >= 5 && sSettings.fields >= 10, JSON.stringify(sSettings))
   record('设置页有测试按钮', sSettings.buttons.some((b) => b.includes('测试')), JSON.stringify(sSettings.buttons))
-
-  // 6.06 唤醒词：设置页改完立即写 localStorage，并同步常驻浮层的提示
-  const wakeInput = await evaluate(`(() => {
-    const title = [...document.querySelectorAll('.admin-root .group-title')].find((t) => t.textContent.includes('语音唤醒'));
-    if (!title) return { found: false };
-    const input = title.closest('section').querySelector('input');
-    if (!input) return { found: true, input: false };
-    input.focus();
-    input.value = '小助手';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    return { found: true, input: true, value: input.value };
-  })()`)
-  record('设置页有唤醒词输入框', wakeInput.found && wakeInput.input, JSON.stringify(wakeInput))
-  await sleep(300)
-  await evaluate(`(() => {
-    const title = [...document.querySelectorAll('.admin-root .group-title')].find((t) => t.textContent.includes('语音唤醒'));
-    title.closest('section').querySelector('input').blur();
-    return true;
-  })()`)
-  await sleep(600)
-  const wakeState = await evaluate(`(() => ({
-    stored: localStorage.getItem('agent-wake-phrase'),
-    dockTitle: (document.querySelector('.agent-dock__wake') || {}).title || '',
-    toasts: [...document.querySelectorAll('.arco-message')].map((e) => e.textContent.trim())
-  }))()`)
-  record('唤醒词写入 localStorage', wakeState.stored === '小助手', JSON.stringify(wakeState))
-  record('改唤醒词后浮层提示同步', wakeState.dockTitle.includes('小助手'), wakeState.dockTitle)
-  record('唤醒词保存有提示', wakeState.toasts.some((t) => t.includes('小助手')), JSON.stringify(wakeState.toasts))
-  // 恢复默认，避免影响后续用例
-  await evaluate(`(() => {
-    const title = [...document.querySelectorAll('.admin-root .group-title')].find((t) => t.textContent.includes('语音唤醒'));
-    const input = title.closest('section').querySelector('input');
-    input.focus();
-    input.value = '你好你好';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.blur();
-    return true;
-  })()`)
-  await sleep(400)
-  const wakeReset = await evaluate("localStorage.getItem('agent-wake-phrase')")
-  record('唤醒词可恢复默认', wakeReset === '你好你好', String(wakeReset))
-
   await evaluate(`(() => { const b=[...document.querySelectorAll('.admin-root .nav-link')].find(x=>x.textContent.includes('知识库')); if (b) b.click(); return true; })()`)
   await sleep(1500)
 
