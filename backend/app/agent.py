@@ -60,6 +60,7 @@ SYSTEM_MAP = """
   - dashboard 工作概览：会话总数、知识库文档数、最近会话表。
   - conversations 对话记录：历史会话列表、搜索、查看详情、删除。
   - knowledge 知识库管理：上传文档（md/txt/docx/pdf）、重建索引、文档列表、删除。
+  - settings 系统设置：模型与 API 地址/密钥、TTS 音色、ASR 模型、检索参数、数字人名字（改完立即生效）。
 
 ## 可用动作（白名单）
 - navigate_page(page)：切换页面，page ∈ board / edit / admin
@@ -70,7 +71,7 @@ SYSTEM_MAP = """
 - open_gallery(index?, project?)：打开图片灯箱；未打开详情时可传项目名，会先打开该项目
 - step_gallery(delta)：图片灯箱翻页，delta = -1 上一张 / 1 下一张（仅在灯箱已打开时使用；未打开时用 open_gallery）
 - close_gallery()：关闭图片灯箱
-- open_admin_tab(tab)：后台页签，tab ∈ dashboard / conversations / knowledge
+- open_admin_tab(tab)：后台页签，tab ∈ dashboard / conversations / knowledge / settings
 """.strip()
 
 TOOLS = [
@@ -178,7 +179,7 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "tab": {"type": "string", "enum": ["dashboard", "conversations", "knowledge"]}
+                    "tab": {"type": "string", "enum": ["dashboard", "conversations", "knowledge", "settings"]}
                 },
                 "required": ["tab"],
             },

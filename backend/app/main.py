@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from .config import APP_TITLE, APP_VERSION, CORS_ORIGINS, FRONTEND_DIST, REPO_ROOT
 from .db import SessionLocal, init_db
 from .admin_compat import router as admin_router
+from .settings_api import apply_overrides
+from .settings_api import router as settings_router
 from .agent import router as agent_router
 from pp7rag.ragapi.routes import router as rag_router
 
@@ -51,6 +53,10 @@ async def _warm_agent() -> None:
         logger.info("rag_warmup_agent_ready")
     except Exception as exc:
         logger.warning("rag_warmup_agent_failed: %s", exc)
+
+
+# 启动时应用 settings.json 里的覆盖值（管理后台改过的参数）
+apply_overrides()
 
 
 async def _warmup_rag() -> None:
@@ -91,6 +97,8 @@ app.include_router(api_router)
 app.include_router(rag_router)
 # 管理后台：会话/统计（映射到 RAG 的 SQLite 问答日志）
 app.include_router(admin_router)
+# 系统设置：模型 / 语音 / 检索 / 数字人参数（在线修改，立即生效）
+app.include_router(settings_router)
 # 实验：语义操作界面的 Agent（白名单动作 + LLM function calling）
 app.include_router(agent_router)
 

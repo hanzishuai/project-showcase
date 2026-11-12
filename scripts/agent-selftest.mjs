@@ -38,6 +38,8 @@ const CASES = [
   },
   { name: '打开管理后台的知识库页面', ui: BOARD_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'knowledge' } }], forbid: ['navigate_page'] } },
   { name: '打开对话记录', ui: ADMIN_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'conversations' } }] } },
+  { name: '打开系统设置', ui: ADMIN_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'settings' } }] } },
+  { name: '改一下数字人的音色', ui: ADMIN_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'settings' } }] } },
   { name: '把看板切到数据总览', ui: BOARD_UI, expect: { tools: [{ tool: 'set_board_view', args: { view: 'overview' } }] } },
   { name: '切回生命周期看板', ui: { ...BOARD_UI, boardView: 'overview' }, expect: { tools: [{ tool: 'set_board_view', args: { view: 'board' } }] } },
   { name: '只看张三指导的项目', ui: BOARD_UI, expect: { tools: [{ tool: 'filter_board', args: { advisor: '张三' } }] } },

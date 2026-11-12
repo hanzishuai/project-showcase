@@ -22,3 +22,4 @@ backend/data/*.log
 backend/.env
 backend/data/chroma_storage/
 backend/data/qa_log.sqlite3
+backend/data/settings.json

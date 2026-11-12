@@ -175,7 +175,28 @@ try {
   const s4 = await askExpect('打开管理后台的知识库页面', (snap) => snap.hash === '#/admin' && snap.admin, { wait: 4500 })
   record('跳到管理后台', s4.hash === '#/admin' && s4.admin, JSON.stringify({ hash: s4.hash, admin: s4.admin }))
   record('知识库页签高亮', s4.adminTab.includes('知识库'), s4.adminTab)
-  record('后台浮层仍在', !!s4.dock && s4.dock.w === 380, JSON.stringify(s4.dock))
+  record('后台浮层仍在（默认收起）', !!s4.dock && (s4.dock.w === 380 || s4.dock.w === 88), JSON.stringify(s4.dock))
+  // 收起状态点气泡应能展开
+  const bubble = await evaluate(`(() => { const b = document.querySelector('.agent-dock__bubble'); if (!b) return 'no-bubble'; b.click(); return 'clicked'; })()`)
+  await sleep(800)
+  const sExpanded = await state()
+  record('点气泡可展开浮层', sExpanded.dock && sExpanded.dock.w === 380, JSON.stringify({ bubble, dock: sExpanded.dock }))
+  await evaluate(`(() => { const t = document.querySelector('.agent-dock__toggle'); if (t) t.click(); return true; })()`)
+  await sleep(600)
+
+  // 6.05 后台「系统设置」页
+  await evaluate(`(() => { const b=[...document.querySelectorAll('.admin-root .nav-link')].find(x=>x.textContent.includes('系统设置')); if (b) b.click(); return true; })()`)
+  await sleep(2500)
+  const sSettings = await evaluate(`(() => ({
+    heading: (document.querySelector('.admin-root .page-heading h2')||{}).textContent,
+    groups: document.querySelectorAll('.admin-root .group-title').length,
+    fields: document.querySelectorAll('.admin-root .field').length,
+    buttons: [...document.querySelectorAll('.admin-root .actions button')].map(b => b.textContent.trim())
+  }))()`)
+  record('系统设置页渲染', sSettings.heading === '系统设置' && sSettings.groups >= 5 && sSettings.fields >= 10, JSON.stringify(sSettings))
+  record('设置页有测试按钮', sSettings.buttons.some((b) => b.includes('测试')), JSON.stringify(sSettings.buttons))
+  await evaluate(`(() => { const b=[...document.querySelectorAll('.admin-root .nav-link')].find(x=>x.textContent.includes('知识库')); if (b) b.click(); return true; })()`)
+  await sleep(1500)
 
   // 6. 写操作被拒绝
   const beforeModal = s4.modal

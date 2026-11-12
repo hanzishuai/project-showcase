@@ -40,13 +40,14 @@
 import { computed } from 'vue'
 
 const props = defineProps<{ active: string }>()
-defineEmits<{ (e: 'change', key: 'dashboard' | 'conversations' | 'knowledge'): void; (e: 'back'): void }>()
+defineEmits<{ (e: 'change', key: 'dashboard' | 'conversations' | 'knowledge' | 'settings'): void; (e: 'back'): void }>()
 
 const year = new Date().getFullYear()
 const items = [
   { key: 'dashboard' as const, label: '工作概览', icon: '▦' },
   { key: 'conversations' as const, label: '对话记录', icon: '◫' },
-  { key: 'knowledge' as const, label: '知识库管理', icon: '▤' }
+  { key: 'knowledge' as const, label: '知识库管理', icon: '▤' },
+  { key: 'settings' as const, label: '系统设置', icon: '⚙' }
 ]
 const pageTitle = computed(() => items.find((item) => item.key === props.active)?.label || '管理工作台')
 </script>

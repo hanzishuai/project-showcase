@@ -51,7 +51,7 @@ onMounted(() => {
     // 同时处理「跳到后台 + 指定页签」，避免依赖 AdminPage 的挂载时机
     registerAction('open_admin_tab', (args) => {
       const tab = String(args.tab ?? 'dashboard')
-      if (!['dashboard', 'conversations', 'knowledge'].includes(tab)) return false
+      if (!['dashboard', 'conversations', 'knowledge', 'settings'].includes(tab)) return false
       uiState.adminTab = tab as typeof uiState.adminTab
       window.location.hash = '#/admin'
       return true

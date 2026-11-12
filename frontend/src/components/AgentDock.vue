@@ -138,7 +138,8 @@ const onError = (message: string) => console.warn('[rag-avatar]', message)
 watch(
   () => props.page,
   async (next) => {
-    if (next !== 'kanban') collapsed.value = false
+    // 后台/编辑页内容较满：默认收起成气泡，点开再展开
+    if (next !== 'kanban') collapsed.value = true
     observedApp = null
     await nextTick()
     measure()

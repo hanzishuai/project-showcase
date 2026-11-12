@@ -16,10 +16,11 @@ import AdminShell from './AdminShell.vue'
 import Dashboard from './views/Dashboard.vue'
 import Conversations from './views/Conversations.vue'
 import KnowledgeBase from './views/KnowledgeBase.vue'
+import Settings from './views/Settings.vue'
 
 defineEmits<{ (e: 'back'): void }>()
 
-type TabKey = 'dashboard' | 'conversations' | 'knowledge'
+type TabKey = 'dashboard' | 'conversations' | 'knowledge' | 'settings'
 const active = ref<TabKey>((uiState.adminTab as TabKey) || 'dashboard')
 
 // Agent 切换页签：外部改 uiState，本页跟随；手动点页签时回写 uiState
@@ -32,7 +33,7 @@ watch(
 watch(active, (tab) => {
   uiState.adminTab = tab
 })
-const views = { dashboard: Dashboard, conversations: Conversations, knowledge: KnowledgeBase }
+const views = { dashboard: Dashboard, conversations: Conversations, knowledge: KnowledgeBase, settings: Settings }
 const currentView = computed(() => views[active.value])
 
 // 后台数据由 agent/context 统一预取与刷新

@@ -8,7 +8,7 @@ export const uiState = reactive({
   advisorFilter: '',
   showHistory: false,
   openProject: '',
-  adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge',
+  adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge' | 'settings',
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
   /** 看板项目名，作为 Agent 的可用目标（避免它编造项目） */
