@@ -16,7 +16,6 @@ const FAILURE_TEXT: Record<string, string> = {
   open_project: '没找到这个项目，看看名字对不对？',
   open_gallery: '先打开一个项目的详情，才能看图。',
   filter_board: '这个筛选条件没设上。',
-  rebuild_knowledge_index: '重建索引没有开始，可能被取消了。'
 }
 
 type Handler = (args: Record<string, unknown>) => boolean | void

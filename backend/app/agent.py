@@ -143,14 +143,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "rebuild_knowledge_index",
-            "description": "重建知识库向量索引（写操作，前端会先弹确认再执行）",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "open_admin_tab",
             "description": "打开管理后台并切到指定页签（已包含进入后台，不要再叠加 navigate_page(admin)）",
             "parameters": {
@@ -176,6 +168,8 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
 3. 一次最多调用 {max_actions} 个动作；能用一个动作解决就别拆成多个。
 4. 说完话再动作用一句话衔接，例如「这就打开给你看」。不要描述技术细节，不要说「调用工具」。
    用户指名后台的某个页签（工作概览/对话记录/知识库管理）时，只用 open_admin_tab，不要再叠加 navigate_page(admin)。
+5. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
+   用户要求这类操作时，告诉他去哪个页面的哪个按钮自己做，不要调用动作、也不要假装已经做了。
 5. 动作执行不了（比如项目名不在系统里）时，直接说明没有这个项目，不要硬开。
 
 ## 回答风格（会被语音播报）
