@@ -140,6 +140,7 @@ try {
         adminTab: (document.querySelector('.admin-root .nav-link.active') || {}).textContent || '',
         dock: rect(dock),
         stage: rect(stage),
+        avatarDisplay: (() => { const el = document.querySelector('.agent-dock .pp7-rag-avatar'); return el ? getComputedStyle(el).display : null })(),
         toasts: [...document.querySelectorAll('.arco-message')].map((e) => e.textContent.trim()),
         lastReply: (() => { const list = document.querySelectorAll('.pp7-chat-msg'); const last = list[list.length - 1]; return last ? (last.querySelector('.pp7-chat-msg__bubble')?.textContent || '').trim() : ''; })(),
         modal: [...document.querySelectorAll('.arco-modal')].some((m) => {
@@ -239,6 +240,7 @@ try {
   const s6 = await state()
   record('返回看板', s6.hash === '#/' && s6.board, JSON.stringify({ hash: s6.hash, board: s6.board }))
   record('浮层重新贴合', !!s6.dock && !!s6.stage && s6.dock.x === s6.stage.x, JSON.stringify({ dock: s6.dock, stage: s6.stage }))
+  record('返回看板后数字人可见', s6.avatarDisplay !== 'none', JSON.stringify({ avatarDisplay: s6.avatarDisplay }))
 
   // 7.5 播报中打断：点麦克风应停止播报并开始录音
   await ask('帮我把这个系统讲一遍，从头开始', 1000)

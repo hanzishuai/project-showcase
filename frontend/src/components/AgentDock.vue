@@ -167,8 +167,9 @@ const onClickCapture = (event: MouseEvent): void => {
 watch(
   () => props.page,
   async (next) => {
-    // 后台/编辑页内容较满：默认收起成气泡，点开再展开
-    if (next !== 'kanban') collapsed.value = true
+    // 后台/编辑页内容较满：默认收起成气泡；回看板时恢复完整数字人
+    // （看板页没有展开按钮，收起状态下数字人会一直不显示，必须重置）
+    collapsed.value = next !== 'kanban'
     observedApp = null
     await nextTick()
     measure()
