@@ -249,3 +249,35 @@
 .agent-dock__wake-label{white-space:nowrap}
 .agent-dock.is-collapsed .agent-dock__wake{top:-10px;right:22px;border-radius:50%;width:26px;padding:0;justify-content:center}
 .agent-dock.is-collapsed .agent-dock__wake-label{display:none}
+
+/* 连续对话状态（点麦克风结束） */
+.agent-dock__conv{
+  position:absolute;
+  top:38px;
+  right:8px;
+  z-index:5;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:calc(100% - 16px);
+  height:24px;
+  padding:0 10px;
+  border:1px solid rgba(34,211,238,.45);
+  border-radius:999px;
+  background:rgba(10,26,32,.92);
+  color:#22D3EE;
+  font-size:11px;
+  line-height:1;
+  white-space:nowrap;
+  overflow:hidden;
+  pointer-events:none;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.agent-dock__conv-dot{width:6px;height:6px;flex:0 0 auto;border-radius:50%;background:#22D3EE;box-shadow:0 0 8px #22D3EE;animation:agent-conv-blink 1.2s ease-in-out infinite}
+.agent-dock__conv-hint{color:#7C8FA6;font-size:10px}
+.agent-dock.is-collapsed .agent-dock__conv{display:none}
+
+/* 连续对话收音时，让 SDK 的麦克风按钮亮起来 */
+.agent-dock .pp7-chat-mic.is-conversation{border-color:rgba(34,211,238,.85) !important;color:#22D3EE;animation:agent-conv-pulse 1.6s ease-out infinite}
+@keyframes agent-conv-blink{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes agent-conv-pulse{0%{box-shadow:0 0 0 0 rgba(34,211,238,.55)}70%{box-shadow:0 0 0 10px rgba(34,211,238,0)}100%{box-shadow:0 0 0 0 rgba(34,211,238,0)}}

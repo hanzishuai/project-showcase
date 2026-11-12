@@ -27,6 +27,8 @@ const SILENCE_MS = 700
 const MAX_UTTERANCE_MS = 6000
 const RESTART_DELAY_MS = 250
 const MIN_AUDIO_BYTES = 4000
+/** 一点人声都没有就不送识别，避免安静时每个 VAD 片段都发一次 ASR */
+const SPEECH_LEVEL = 0.03
 const PHRASE_STORAGE_KEY = 'agent-wake-phrase'
 
 function normalize(text: string): string {
@@ -113,10 +115,12 @@ export function createWakeWordDetector(options: WakeDetectorOptions): WakeDetect
     setStatus('listening')
 
     let finished = false
+    let spoke = false
     const rec = createWavRecorder({
       vad: { silenceMs: SILENCE_MS },
       onVadSilence: () => void finish(),
       onLevel: (level: number) => {
+        if (level > SPEECH_LEVEL) spoke = true
         if (level > 0.08) setStatus('speech', { level })
       }
     })
@@ -139,7 +143,7 @@ export function createWakeWordDetector(options: WakeDetectorOptions): WakeDetect
       recorder = null
       if (!running) return
 
-      if (blob && blob.size >= MIN_AUDIO_BYTES) {
+      if (spoke && blob && blob.size >= MIN_AUDIO_BYTES) {
         setStatus('transcribing')
         try {
           const text = await transcribe(blob)

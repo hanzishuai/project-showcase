@@ -107,8 +107,8 @@ project-showcase/
 LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作总线执行（9 个只读动作，不执行任何写操作）。
 
 - 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch,wake}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
-- 语音：播报中点麦克风可打断（barge-in）；`🎧` 唤醒开关常驻听「你好你好」，唤醒词可在系统设置里改（只存本浏览器）。
-- 自测：`node scripts/agent-selftest.mjs`（55 条指令用例）、`agent-ui-selftest.mjs`（31 项浏览器断言）、`agent-voice-selftest.mjs`（7 项语音闭环）、`agent-wake-selftest.mjs`（5 项语音唤醒）、`agent-bench.mjs`（首字/总耗时基准与阈值）。
+- 语音：播报中点麦克风可打断（barge-in）；`🎧` 唤醒开关常驻听「你好你好」，说唤醒词直接进入**连续对话**（说完自动继续听，点麦克风结束）；唤醒词可在系统设置里改（只存本浏览器）。
+- 自测：`node scripts/agent-selftest.mjs`（55 条指令用例）、`agent-ui-selftest.mjs`（31 项浏览器断言）、`agent-voice-selftest.mjs`（7 项语音闭环）、`agent-wake-selftest.mjs`（9 项唤醒 + 连续对话）、`agent-bench.mjs`（首字/总耗时基准与阈值）。
 - 说明：`docs/2026-11-12-agent-ui-control.md`。
 
 ## REST API

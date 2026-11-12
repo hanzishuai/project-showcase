@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * 唤醒词自测：假麦克风持续播放「你好你好」→ 打开唤醒 → 断言自动激活并进入录音。
+ * 语音唤醒 + 连续对话自测：
+ *   假麦克风循环播放「你好你好」+ 若干句「你好」→
+ *   开启唤醒 → 断言进入连续对话 → 自动提问 → 回答完自动继续 →
+ *   点麦克风结束 → 不再收音。
  */
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -35,8 +38,12 @@ function resampleWavTo16k(buffer) {
     const b = left + 1 < samples.length ? samples[left + 1] : a
     out[i] = Math.max(-32768, Math.min(32767, Math.round(a + (b - a) * frac)))
   }
+  return Buffer.from(out.buffer)
+}
+
+function wavFromPcm(pcm) {
   const header = Buffer.alloc(44)
-  const dataSize = out.length * 2
+  const dataSize = pcm.length
   header.write('RIFF', 0)
   header.writeUInt32LE(36 + dataSize, 4)
   header.write('WAVE', 8)
@@ -50,10 +57,10 @@ function resampleWavTo16k(buffer) {
   header.writeUInt16LE(16, 34)
   header.write('data', 36)
   header.writeUInt32LE(dataSize, 40)
-  return Buffer.concat([header, Buffer.from(out.buffer)])
+  return Buffer.concat([header, pcm])
 }
 
-async function makeWav(text) {
+async function tts16k(text) {
   const response = await fetch(BASE + '/api/v1/rag/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -61,6 +68,22 @@ async function makeWav(text) {
   })
   if (!response.ok) throw new Error('TTS 失败 ' + response.status)
   return resampleWavTo16k(Buffer.from(await response.arrayBuffer()))
+}
+
+function silencePcm(ms) {
+  return Buffer.alloc(Math.round((16000 * 2 * ms) / 1000))
+}
+
+/** 拼一段「唤醒词 + 3 句追问」，句间留 1.8s 静音，模拟真人连续说几句话 */
+async function buildConversationAudio() {
+  const wake = await tts16k('你好你好')
+  const turn = await tts16k('你好')
+  // 注意：Chrome 假麦克风每开一次流都会把文件从头播，所以文件开头不能放静音，
+  // 否则唤醒检测每次只听得到开头静音、一直重启。真实麦克风不受影响。
+  const parts = [wake, silencePcm(1600)]
+  for (let i = 0; i < 3; i += 1) parts.push(turn, silencePcm(1800))
+  parts.push(silencePcm(2500))
+  return wavFromPcm(Buffer.concat(parts))
 }
 
 async function findTarget(port, tries = 80) {
@@ -82,13 +105,13 @@ let child = null
 let profileDir = null
 let wavDir = null
 try {
-  const wav = await makeWav('你好你好')
-  wavDir = await mkdtemp(join(tmpdir(), 'agent-wake-'))
-  const wavPath = join(wavDir, 'wake.wav')
+  const wav = await buildConversationAudio()
+  wavDir = await mkdtemp(join(tmpdir(), 'agent-conv-'))
+  const wavPath = join(wavDir, 'conversation.wav')
   await writeFile(wavPath, wav)
-  record('生成唤醒词音频', wav.length > 1000, wav.length + ' bytes')
+  record('生成连续对话测试音频', wav.length > 1000, wav.length + ' bytes')
 
-  profileDir = await mkdtemp(join(tmpdir(), 'agent-wake-profile-'))
+  profileDir = await mkdtemp(join(tmpdir(), 'agent-conv-profile-'))
   const port = 9600 + Math.floor(Math.random() * 100)
   child = spawn(CHROME, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
@@ -111,11 +134,18 @@ try {
   })
   let seq = 0
   const pending = new Map()
+  const errors = []
   ws.addEventListener('message', (event) => {
     const message = JSON.parse(event.data)
     if (message.id && pending.has(message.id)) {
       pending.get(message.id)(message)
       pending.delete(message.id)
+    }
+    if (message.method === 'Runtime.exceptionThrown') {
+      errors.push(String(message.params?.exceptionDetails?.text || 'exception').slice(0, 120))
+    }
+    if (message.method === 'Runtime.consoleAPICalled' && message.params?.type === 'error') {
+      errors.push('console: ' + (message.params.args || []).map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 120))
     }
   })
   const send = (method, params = {}) =>
@@ -129,38 +159,86 @@ try {
     if (result.result?.exceptionDetails) throw new Error(JSON.stringify(result.result.exceptionDetails).slice(0, 200))
     return result.result?.result?.value
   }
+  const snapshot = () =>
+    evaluate(`(() => {
+      const pill = document.querySelector('.agent-dock__conv');
+      const mic = document.querySelector('.pp7-chat-mic');
+      const users = [...document.querySelectorAll('.pp7-chat-msg--user')].map((el) => (el.querySelector('.pp7-chat-msg__bubble')?.textContent || '').trim());
+      return {
+        pill: pill ? pill.textContent.trim() : '',
+        pillState: pill ? pill.className : '',
+        wakeLabel: (document.querySelector('.agent-dock__wake-label') || {}).textContent || '',
+        micActive: !!mic && mic.classList.contains('is-conversation'),
+        userCount: users.length,
+        userTexts: users.slice(-3),
+        assistantCount: document.querySelectorAll('.pp7-chat-msg--assistant').length
+      };
+    })()`)
 
   await send('Runtime.enable')
   await sleep(7000)
 
-  const button = await evaluate(`(() => { const b = document.querySelector('.agent-dock__wake'); return b ? 'ok' : 'no-button'; })()`)
+  const button = await evaluate("(() => { const b = document.querySelector('.agent-dock__wake'); return b ? 'ok' : 'no-button'; })()")
   record('唤醒开关存在', button === 'ok', button)
 
-  await evaluate(`document.querySelector('.agent-dock__wake').click()`)
+  await evaluate("document.querySelector('.agent-dock__wake').click()")
   await sleep(800)
-  const onState = await evaluate(`(() => ({ on: !!document.querySelector('.agent-dock__wake.is-on'), label: (document.querySelector('.agent-dock__wake-label')||{}).textContent || '' }))()`)
+  const onState = await evaluate("(() => ({ on: !!document.querySelector('.agent-dock__wake.is-on'), label: (document.querySelector('.agent-dock__wake-label')||{}).textContent || '' }))()")
   record('开启后进入监听', onState.on, JSON.stringify(onState))
 
-  // 等唤醒：最多 25 秒（假麦克风循环播放，分段识别后触发）
-  let woken = false
-  let sawRecording = false
-  for (let i = 0; i < 50; i += 1) {
+  // 1) 听到唤醒词后自动进入连续对话（不需要点麦克风）
+  let pill = null
+  for (let i = 0; i < 60; i += 1) {
     await sleep(500)
-    const state = await evaluate(`(() => ({
-      recording: !!document.querySelector('.pp7-chat-recording'),
-      label: (document.querySelector('.agent-dock__wake-label')||{}).textContent || '',
-      status: (document.querySelector('.pp7-chat-header__status')||{}).textContent || ''
-    }))()`)
-    if (state.recording) { sawRecording = true; woken = true; break }
-    if (state.label.includes('我在')) { woken = true }
+    const state = await snapshot()
+    if (state.pill.includes('连续对话')) {
+      pill = state
+      break
+    }
   }
-  record('听到唤醒词后自动激活', woken, JSON.stringify({ sawRecording }))
-  record('唤醒后自动开始录音', sawRecording, '未观察到录音态')
+  record('听到唤醒词后进入连续对话', !!pill && pill.micActive, JSON.stringify(pill))
 
-  await evaluate(`(() => { const b = document.querySelector('.agent-dock__wake'); if (b) b.click(); return true; })()`)
+  // 2) 连续对话自动提问（没有点麦克风）
+  let firstTurn = null
+  for (let i = 0; i < 60; i += 1) {
+    await sleep(500)
+    const state = await snapshot()
+    if (state.userCount >= 1) {
+      firstTurn = state
+      break
+    }
+  }
+  record('连续对话自动提问（未点麦克风）', !!firstTurn && firstTurn.userCount >= 1, JSON.stringify(firstTurn))
+
+  // 3) 回答完自动继续听，第二轮也能自动提问
+  let secondTurn = null
+  for (let i = 0; i < 90; i += 1) {
+    await sleep(500)
+    const state = await snapshot()
+    if (state.userCount >= 2) {
+      secondTurn = state
+      break
+    }
+  }
+  record('回答完自动继续听（第二轮）', !!secondTurn && secondTurn.userCount >= 2, JSON.stringify(secondTurn))
+
+  // 4) 点麦克风结束连续对话
+  await evaluate("document.querySelector('.pp7-chat-mic').click()")
+  await sleep(1200)
+  const ended = await snapshot()
+  record('点麦克风结束连续对话', ended.pill === '' && !ended.micActive, JSON.stringify(ended))
+
+  // 5) 关掉唤醒开关（假麦克风还在循环，避免又被唤醒），确认不再自动提问
+  await evaluate("document.querySelector('.agent-dock__wake').click()")
+  const frozen = await snapshot()
+  await sleep(6000)
+  const later = await snapshot()
+  record('结束后不再自动收音', later.userCount === frozen.userCount, JSON.stringify({ before: frozen.userCount, after: later.userCount }))
+  record('无前端报错', errors.length === 0, JSON.stringify(errors))
+
   ws.close()
 } catch (error) {
-  record('唤醒测试执行', false, String(error))
+  record('连续对话测试执行', false, String(error))
 } finally {
   if (child) {
     try { process.kill(-child.pid, 'SIGKILL') } catch {}

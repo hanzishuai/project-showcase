@@ -33,13 +33,20 @@
       type="button"
       class="agent-dock__wake"
       :class="{ 'is-on': wakeOn }"
-      :title="wakeOn ? '关闭语音唤醒' : '开启语音唤醒：说「' + wakePhrase + '」'"
+      :title="wakeOn ? '关闭语音唤醒' : '开启语音唤醒：说「' + wakePhrase + '」，进入连续对话'"
       :aria-label="wakeOn ? '关闭语音唤醒' : '开启语音唤醒'"
       @click="toggleWake"
     >
       <span class="agent-dock__wake-icon">🎧</span>
-      <span v-if="wakeOn" class="agent-dock__wake-label">{{ wakeLabel }}</span>
+      <span class="agent-dock__wake-label">{{ wakeLabel }}</span>
     </button>
+
+    <!-- 连续对话状态：点麦克风结束 -->
+    <div v-if="conversationOn" class="agent-dock__conv" :class="'is-' + conversationStatus">
+      <span class="agent-dock__conv-dot" aria-hidden="true"></span>
+      <span>{{ conversationLabel }}</span>
+      <span class="agent-dock__conv-hint">点麦克风结束</span>
+    </div>
 
     <!-- 收起 / 展开（看板页不使用：那里是页面布局的一部分） -->
     <button
@@ -80,6 +87,7 @@ import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-av
 import { agentFetch } from '../agent/fetch'
 import { setActionFailureHandler } from '../agent/bus'
 import { createWakeWordDetector, getWakePhrase, WAKE_PHRASE_EVENT, type WakeStatus } from '../agent/wake'
+import { createConversationLoop, type ConversationStatus } from '../agent/conversation'
 import { uiState } from '../agent/uiState'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
@@ -90,13 +98,18 @@ interface ChatLike {
   busy?: { value: boolean }
   speaking?: { value: boolean }
   interrupt?: () => void
+  ask?: (question: string) => Promise<void> | void
+  primeAudio?: () => Promise<void> | void
 }
 
 const avatarRef = ref<{ chat?: ChatLike } | null>(null)
 const wakeOn = ref(false)
 const wakeStatus = ref<WakeStatus>('off')
 const wakePhrase = ref(getWakePhrase())
+const conversationOn = ref(false)
+const conversationStatus = ref<ConversationStatus>('off')
 let wakeDetector: ReturnType<typeof createWakeWordDetector> | null = null
+let conversationLoop: ReturnType<typeof createConversationLoop> | null = null
 // 直接打开后台/编辑页时也默认收起（不依赖页面切换事件）
 const collapsed = ref(props.page !== 'kanban')
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
@@ -176,6 +189,7 @@ const onWakePhraseChanged = (event: Event): void => {
 }
 
 const wakeLabel = computed(() => {
+  if (conversationOn.value) return '连续对话中'
   switch (wakeStatus.value) {
     case 'listening':
       return '在听「' + wakePhrase.value + '」'
@@ -188,9 +202,94 @@ const wakeLabel = computed(() => {
     case 'error':
       return '麦克风不可用'
     default:
-      return ''
+      return '语音唤醒'
   }
 })
+
+const conversationLabel = computed(() => {
+  switch (conversationStatus.value) {
+    case 'listening':
+      return '连续对话 · 在听'
+    case 'speech':
+      return '连续对话 · 听到了'
+    case 'transcribing':
+      return '连续对话 · 识别中'
+    case 'waiting':
+      return '连续对话 · 助手回答中'
+    case 'error':
+      return '连续对话 · 麦克风不可用'
+    default:
+      return '连续对话'
+  }
+})
+
+/**
+ * 数字人是否已经安静下来（思考和播报都停了 0.7s）。
+ * TTS 是按句请求的，句与句之间 speaking 可能短暂变 false，
+ * 加一个稳定期避免连续对话在句间空隙里把数字人自己的声音录进去。
+ */
+let chatIdleAt = 0
+const chatIsIdle = (): boolean => {
+  const chat = avatarRef.value?.chat
+  if (chat?.busy?.value || chat?.speaking?.value) {
+    chatIdleAt = 0
+    return false
+  }
+  if (!chatIdleAt) chatIdleAt = Date.now()
+  return Date.now() - chatIdleAt >= 700
+}
+
+/** 给 SDK 的麦克风按钮加一圈呼吸灯，提示「现在正在连续收音」 */
+const setMicListening = (on: boolean): void => {
+  const mic = dockEl.value?.querySelector('.pp7-chat-mic')
+  if (mic) mic.classList.toggle('is-conversation', on)
+}
+
+/** 结束连续对话：停麦、打断回答、恢复唤醒监听 */
+const endConversation = (notify = true): void => {
+  if (!conversationOn.value) return
+  conversationOn.value = false
+  conversationStatus.value = 'off'
+  conversationLoop?.stop()
+  conversationLoop = null
+  setMicListening(false)
+  const chat = avatarRef.value?.chat
+  if (chat?.busy?.value || chat?.speaking?.value) chat.interrupt?.()
+  if (notify) Message.info({ content: '已结束连续对话', duration: 1600 })
+}
+
+/** 唤醒后进入连续对话：一直听 → 自动提问 → 回答完继续听，直到点麦克风 */
+const startConversation = (): void => {
+  if (conversationOn.value) return
+  if (!avatarRef.value?.chat) return
+  conversationOn.value = true
+  collapsed.value = false
+  conversationStatus.value = 'listening'
+  setMicListening(true)
+  Message.success({ content: '我在，请说；点麦克风结束连续对话', duration: 2400 })
+  conversationLoop = createConversationLoop({
+    shouldPause: () => {
+      if (!chatIsIdle()) return true
+      // 用户自己点了麦克风按钮、SDK 正在单句录音时也让路
+      return !!dockEl.value?.querySelector('.pp7-chat-recording')
+    },
+    onTranscript: (text) => {
+      const chat = avatarRef.value?.chat
+      if (!chat?.ask) return
+      conversationStatus.value = 'waiting'
+      void chat.primeAudio?.()
+      void chat.ask(text)
+    },
+    onStatus: (status) => {
+      conversationStatus.value = status
+    },
+    onFatal: (message) => {
+      Message.error({ content: '连续对话已结束：' + message, duration: 2400 })
+      endConversation(false)
+    }
+  })
+  conversationLoop.start()
+}
 
 const toggleWake = (): void => {
   if (wakeOn.value) {
@@ -203,21 +302,17 @@ const toggleWake = (): void => {
   const detector = createWakeWordDetector({
     phrase: wakePhrase.value,
     shouldPause: () => {
-      const chat = avatarRef.value?.chat
-      if (chat?.busy?.value || chat?.speaking?.value) return true
+      if (conversationOn.value) return true
+      if (!chatIsIdle()) return true
       return !!dockEl.value?.querySelector('.pp7-chat-recording')
     },
     onStatus: (status) => {
       wakeStatus.value = status
     },
     onWake: () => {
-      // 唤醒后展开面板并把麦克风交给数字人，等用户直接说指令
+      // 唤醒后直接进入连续对话，不用再点麦克风
       collapsed.value = false
-      Message.success({ content: '我在，请说', duration: 1800 })
-      setTimeout(() => {
-        const mic = dockEl.value?.querySelector('.pp7-chat-mic') as HTMLButtonElement | null
-        if (mic && !mic.disabled) mic.click()
-      }, 260)
+      startConversation()
     }
   })
   wakeDetector = detector
@@ -232,6 +327,13 @@ const toggleWake = (): void => {
 const onClickCapture = (event: MouseEvent): void => {
   const target = event.target as HTMLElement | null
   if (!target || !target.closest('.pp7-chat-mic')) return
+  if (conversationOn.value) {
+    // 连续对话中：点麦克风 = 结束收音，不能再走 SDK 的「单句录音并发送」
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    endConversation()
+    return
+  }
   const chat = avatarRef.value?.chat
   if (!chat?.interrupt) return
   if (chat.speaking?.value || chat.busy?.value) {
@@ -250,6 +352,27 @@ watch(
     observeApp()
     setTimeout(measure, 120)
     setTimeout(measure, 400)
+  }
+)
+
+// 数字人在思考/播报时，连续对话先暂停收音
+watch(
+  () => [avatarRef.value?.chat?.busy?.value, avatarRef.value?.chat?.speaking?.value] as const,
+  ([busy, speaking]) => {
+    if (!conversationOn.value) return
+    if (busy || speaking) conversationStatus.value = 'waiting'
+  }
+)
+
+// 收起面板 / 打开灯箱遮罩时，结束连续对话（否则面板看不见但麦克风还开着）
+watch(collapsed, (next) => {
+  if (next) endConversation(false)
+})
+
+watch(
+  () => uiState.modalOpen,
+  (open) => {
+    if (open) endConversation(false)
   }
 )
 
@@ -274,6 +397,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  endConversation(false)
+  conversationLoop?.stop()
+  conversationLoop = null
+  setMicListening(false)
   wakeDetector?.stop()
   wakeDetector = null
   setActionFailureHandler(null)
