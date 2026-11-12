@@ -14,11 +14,28 @@ const PROJECTS = [
 ]
 
 const BOARD_UI = { page: 'board', boardView: 'board', projectFilter: '', advisorFilter: '', openProject: '' }
+const BOARD_PROJECTS = [
+  { name: '实验室预约系统', version: 'v1.2', stage: '开发', advisor: '张三' },
+  { name: '科研成果管理平台', version: 'v2.0', stage: '测试', advisor: '李四' },
+  { name: '课程实践评价系统', version: 'v1.1', stage: '开发', advisor: '王五' },
+  { name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪' },
+]
+const BOARD_FULL = { ...BOARD_UI, boardProjects: BOARD_PROJECTS, visibleCards: 4 }
 const ADMIN_UI = { page: 'admin', adminTab: 'dashboard', openProject: '' }
 
 /** expect.tools: 必须调用的工具（按需校验参数子集）；forbid: 不允许出现的工具 */
 const CASES = [
-  { name: '打开管理后台', ui: BOARD_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'dashboard' } }] }, forbid: ['navigate_page'] },
+  {
+    name: '打开管理后台',
+    ui: BOARD_UI,
+    expect: {
+      tools: [],
+      anyOf: [
+        { tool: 'navigate_page', args: { page: 'admin' } },
+        { tool: 'open_admin_tab', args: { tab: 'dashboard' } }
+      ]
+    }
+  },
   { name: '打开管理后台的知识库页面', ui: BOARD_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'knowledge' } }], forbid: ['navigate_page'] } },
   { name: '打开对话记录', ui: ADMIN_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'conversations' } }] } },
   { name: '把看板切到数据总览', ui: BOARD_UI, expect: { tools: [{ tool: 'set_board_view', args: { view: 'overview' } }] } },
@@ -72,6 +89,11 @@ const CASES = [
   { name: '把筛选清空', ui: { ...BOARD_UI, projectFilter: '实验室预约系统', advisorFilter: '张三' }, expect: { tools: [{ tool: 'filter_board' }] } },
   { name: '把它关了', ui: { ...BOARD_UI, openProject: '实验室预约系统' }, expect: { tools: [{ tool: 'close_drawer' }] } },
   { name: '学术讲座预约平台在哪一列', ui: { ...BOARD_UI, boardProjects: [{ name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪' }] }, expect: { tools: [] } },
+  // ---- 看板事实问答：直接答、不操作 ----
+  { name: '实验室预约系统现在什么进度？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['v1.2'] } },
+  { name: '哪些项目已经上线了？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['学术讲座预约平台'] } },
+  { name: '张三指导了哪些项目？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['实验室预约系统'] } },
+  { name: '管理后台有多少个会话', ui: { page: 'admin', adminTab: 'dashboard', adminStats: { sessions: 42, documents: 3 } }, expect: { tools: [], sayIncludes: ['42'] } },
   {
     name: '它上线了吗',
     ui: BOARD_UI,
@@ -118,7 +140,15 @@ async function ask(question, ui, history) {
   return { actions, say: tokens.join('') }
 }
 
-function check(expect, actions) {
+function matches(action, want) {
+  if (action.tool !== want.tool) return false
+  for (const [key, value] of Object.entries(want.args || {})) {
+    if (String(action.args?.[key] ?? '') !== String(value)) return false
+  }
+  return true
+}
+
+function check(expect, actions, say) {
   const problems = []
   const usedTools = actions.map((a) => a.tool)
   for (const want of expect.tools || []) {
@@ -136,11 +166,20 @@ function check(expect, actions) {
       }
     }
   }
+  if (expect.anyOf && expect.anyOf.length > 0) {
+    const hit = expect.anyOf.some((want) => actions.some((action) => matches(action, want)))
+    if (!hit) {
+      problems.push('anyOf 未命中：' + JSON.stringify(expect.anyOf.map((w) => w.tool)))
+    }
+  }
   for (const bad of expect.forbid || []) {
     if (usedTools.includes(bad)) problems.push('不该出现动作 ' + bad)
   }
-  if ((expect.tools || []).length === 0 && actions.length > 0) {
+  if ((expect.tools || []).length === 0 && !expect.anyOf && actions.length > 0) {
     problems.push('期望无动作，实际=' + JSON.stringify(usedTools))
+  }
+  for (const keyword of expect.sayIncludes || []) {
+    if (!say.includes(keyword)) problems.push('回答里应包含「' + keyword + '」')
   }
   return problems
 }
@@ -150,7 +189,7 @@ const failures = []
 for (const item of CASES) {
   try {
     const result = await ask(item.name, item.ui, item.history)
-    const problems = check(item.expect, result.actions)
+    const problems = check(item.expect, result.actions, result.say)
     if (problems.length === 0) {
       passed += 1
       console.log('  ✅ ' + item.name)

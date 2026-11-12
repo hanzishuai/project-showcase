@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { uiState } from '../agent/uiState'
 import AdminShell from './AdminShell.vue'
 import Dashboard from './views/Dashboard.vue'
@@ -33,4 +33,19 @@ watch(active, (tab) => {
 })
 const views = { dashboard: Dashboard, conversations: Conversations, knowledge: KnowledgeBase }
 const currentView = computed(() => views[active.value])
+
+// 把后台概览数据同步给 Agent（这样它能回答「后台有多少会话」这类问题）
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/admin/stats')
+    if (!res.ok) return
+    const data = await res.json()
+    uiState.adminStats = {
+      sessions: Number(data.total_sessions ?? 0),
+      documents: Number(data.total_documents ?? 0)
+    }
+  } catch {
+    // 统计失败不影响页面
+  }
+})
 </script>

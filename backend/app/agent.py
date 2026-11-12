@@ -259,6 +259,14 @@ def _ui_context(ui: dict | None) -> str:
             parts.append("图片灯箱未打开")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
+        stats = ui.get("adminStats")
+        if isinstance(stats, dict):
+            parts.append(
+                "后台统计：会话 {sessions} 个、知识库文档 {documents} 篇".format(
+                    sessions=stats.get("sessions", 0),
+                    documents=stats.get("documents", 0),
+                )
+            )
     if isinstance(ui.get("visibleCards"), int):
         parts.append(f"当前筛选后可见版本卡：{ui.get('visibleCards')} 个")
     board = ui.get("boardProjects") or []
