@@ -15,10 +15,10 @@ const PROJECTS = [
 
 const BOARD_UI = { page: 'board', boardView: 'board', projectFilter: '', advisorFilter: '', openProject: '' }
 const BOARD_PROJECTS = [
-  { name: '实验室预约系统', version: 'v1.2', stage: '开发', advisor: '张三' },
-  { name: '科研成果管理平台', version: 'v2.0', stage: '测试', advisor: '李四' },
-  { name: '课程实践评价系统', version: 'v1.1', stage: '开发', advisor: '王五' },
-  { name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪' },
+  { name: '实验室预约系统', version: 'v1.2', stage: '开发', advisor: '张三', stack: 'Vue 3·Spring Boot·MySQL', team: '张三、李宁、王琳', users: 0, features: 0 },
+  { name: '科研成果管理平台', version: 'v2.0', stage: '测试', advisor: '李四', stack: 'React·Node.js·PostgreSQL', team: '李四、孙瑶、陈泽', users: 0, features: 0 },
+  { name: '课程实践评价系统', version: 'v1.1', stage: '开发', advisor: '王五', stack: 'Vue 3·Spring Boot·Redis', team: '王五、周可、赵敏', users: 0, features: 0 },
+  { name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪', stack: 'Vue 3·Spring Boot·PostgreSQL', team: '吴迪、贺云、何琳', users: 1260, features: 24 },
 ]
 const BOARD_FULL = { ...BOARD_UI, boardProjects: BOARD_PROJECTS, visibleCards: 4 }
 const ADMIN_UI = { page: 'admin', adminTab: 'dashboard', openProject: '' }
@@ -93,6 +93,34 @@ const CASES = [
   { name: '实验室预约系统现在什么进度？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['v1.2'] } },
   { name: '哪些项目已经上线了？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['学术讲座预约平台'] } },
   { name: '张三指导了哪些项目？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['实验室预约系统'] } },
+  { name: '实验室预约系统用什么技术栈？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['Vue 3'] } },
+  { name: '实验室预约系统的团队都有谁？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['李宁'] } },
+  { name: '学术讲座预约平台有多少用户？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['1260'] } },
+  { name: '在看板页问后台有多少会话', ui: { ...BOARD_FULL, adminStats: { sessions: 42, documents: 1 } }, expect: { tools: [], sayIncludes: ['42'] } },
+
+  // ---- 复合指令：动作 + 同时回答 ----
+  {
+    name: '打开管理后台，顺便告诉我有几个会话',
+    ui: { ...BOARD_FULL, adminStats: { sessions: 42, documents: 1 } },
+    expect: {
+      tools: [],
+      anyOf: [
+        { tool: 'open_admin_tab', args: { tab: 'dashboard' } },
+        { tool: 'navigate_page', args: { page: 'admin' } }
+      ],
+      sayIncludes: ['42']
+    }
+  },
+  {
+    name: '打开实验室预约系统的详情，然后告诉我它用什么技术栈',
+    ui: BOARD_FULL,
+    expect: { tools: [{ tool: 'open_project', args: { project: '实验室预约系统' } }], sayIncludes: ['Vue 3'] }
+  },
+  {
+    name: '切到数据总览，顺便说说有几个项目',
+    ui: BOARD_FULL,
+    expect: { tools: [{ tool: 'set_board_view', args: { view: 'overview' } }], sayIncludes: ['4'] }
+  },
   { name: '管理后台有多少个会话', ui: { page: 'admin', adminTab: 'dashboard', adminStats: { sessions: 42, documents: 3 } }, expect: { tools: [], sayIncludes: ['42'] } },
   { name: '知识库里有哪些文档', ui: { page: 'admin', adminTab: 'knowledge', adminStats: { sessions: 1, documents: 2 }, knowledgeDocs: ['产教融合服务平台.md', '实验室预约系统说明.md'] }, expect: { tools: [], sayIncludes: ['产教融合'] } },
   {
@@ -119,6 +147,7 @@ async function ask(question, ui, history) {
   let event = ''
   const actions = []
   const tokens = []
+  let error = null
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
@@ -135,10 +164,12 @@ async function ask(question, ui, history) {
         try { actions.push(JSON.parse(payload)) } catch {}
       } else if (event === 'token') {
         try { tokens.push(JSON.parse(payload).text || '') } catch {}
+      } else if (event === 'error') {
+        try { error = JSON.parse(payload).message || 'error' } catch { error = 'error' }
       }
     }
   }
-  return { actions, say: tokens.join('') }
+  return { actions, say: tokens.join(''), error }
 }
 
 function matches(action, want) {
@@ -149,8 +180,9 @@ function matches(action, want) {
   return true
 }
 
-function check(expect, actions, say) {
+function check(expect, actions, say, error) {
   const problems = []
+  if (error) problems.push('请求返回错误：' + error)
   const usedTools = actions.map((a) => a.tool)
   for (const want of expect.tools || []) {
     const hit = actions.find((a) => a.tool === want.tool)
@@ -189,8 +221,13 @@ let passed = 0
 const failures = []
 for (const item of CASES) {
   try {
-    const result = await ask(item.name, item.ui, item.history)
-    const problems = check(item.expect, result.actions, result.say)
+    let result = await ask(item.name, item.ui, item.history)
+    if (result.error || (!result.say && !result.actions.length)) {
+      // 偶发的模型/网络错误：重试一次再判
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      result = await ask(item.name, item.ui, item.history)
+    }
+    const problems = check(item.expect, result.actions, result.say, result.error)
     if (problems.length === 0) {
       passed += 1
       console.log('  ✅ ' + item.name)

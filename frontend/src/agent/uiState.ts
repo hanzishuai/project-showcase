@@ -19,7 +19,16 @@ export const uiState = reactive({
   /** 当前筛选后可见的版本卡数量，Agent 用它回答「还剩几个」 */
   visibleCards: 0,
   /** 看板项目快照（名称/版本/阶段/指导老师），让 Agent 直接回答看板上的事实 */
-  boardProjects: [] as Array<{ name: string; version: string; stage: string; advisor: string }>,
+  boardProjects: [] as Array<{
+    name: string
+    version: string
+    stage: string
+    advisor: string
+    stack: string
+    team: string
+    users: number
+    features: number
+  }>,
   /** 管理后台概览数据 */
   adminStats: { sessions: 0, documents: 0 } as { sessions: number; documents: number },
   /** 知识库文档名，让 Agent 能回答「知识库里有哪些文档」 */

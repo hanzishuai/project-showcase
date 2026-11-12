@@ -5,6 +5,7 @@ import DataEditPage from './views/DataEditPage.vue'
 import AdminPage from './admin/AdminPage.vue'
 import AgentDock from './components/AgentDock.vue'
 import { registerAction } from './agent/bus'
+import { refreshGlobalContext } from './agent/context'
 import { uiState } from './agent/uiState'
 
 const hash = ref(window.location.hash)
@@ -28,6 +29,7 @@ watch(
   route,
   (value) => {
     uiState.page = value === 'kanban' ? 'board' : value
+    if (value === 'admin') void refreshGlobalContext()
   },
   { immediate: true }
 )
@@ -36,6 +38,8 @@ let offs: Array<() => void> = []
 
 onMounted(() => {
   window.addEventListener('hashchange', syncRoute)
+  // 启动即预取全局数据：这样在看板页也能回答「后台有多少会话」
+  void refreshGlobalContext()
   offs = [
     registerAction('navigate_page', (args) => {
       const page = String(args.page ?? '')

@@ -196,10 +196,16 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
 2. 用户问资料类问题（平台是什么、项目进度、怎么用）时，参考【参考资料】回答，不要调用动作。
 3. 一次最多调用 {max_actions} 个动作；能用一个动作解决就别拆成多个。
 4. 说完话再动作用一句话衔接，例如「这就打开给你看」。不要描述技术细节，不要说「调用工具」。
-   用户只是询问信息（某个项目在哪一列、什么阶段、谁指导、总共几个）时，直接用「当前界面」里的看板数据回答，
-   不要为了回答而打开详情或切换页面；只有用户明确说「打开 / 看看 / 切到 / 跳到」时才调用动作。
+   用户只是询问信息（某个项目在哪一列、什么阶段、谁指导、用什么技术栈、团队是谁、总共几个）时，
+   直接用「当前界面」里的看板/后台数据回答，不要为了回答而打开详情或切换页面；
+   只有用户明确说「打开 / 看看 / 切到 / 跳到」时才调用动作。
    用户指名后台的某个页签（工作概览/对话记录/知识库管理）时，只用 open_admin_tab，不要再叠加 navigate_page(admin)。
-5. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
+5. **调用动作时也必须说话**：每次调用动作都要配至少一句话（说明做了什么），不要只返回动作、正文留空。
+6. 一句话里既有动作又有问题时（「打开后台，顺便告我几个会话」「打开实验室预约系统，再说说技术栈」），
+   动作照做，同时把那半句问题也答了。
+   例：问「打开后台，顺便告诉我有多少会话」→ 动作 open_admin_tab(dashboard)，话术「这就打开后台，目前累计【N】个会话」。
+   例：问「打开实验室预约系统，说说技术栈」→ 动作 open_project(实验室预约系统)，话术「这就打开，它用的是【技术栈】」。
+7. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
    用户要求这类操作时，告诉他去哪个页面的哪个按钮自己做，不要调用动作、也不要假装已经做了。
 5. 动作执行不了（比如项目名不在系统里）时，直接说明没有这个项目，不要硬开。
 
@@ -258,17 +264,18 @@ def _ui_context(ui: dict | None) -> str:
             parts.append("图片灯箱未打开")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
-        stats = ui.get("adminStats")
-        if isinstance(stats, dict):
-            parts.append(
-                "后台统计：会话 {sessions} 个、知识库文档 {documents} 篇".format(
-                    sessions=stats.get("sessions", 0),
-                    documents=stats.get("documents", 0),
-                )
+    # 后台统计与知识库文档是全局数据，任何页面都带上
+    stats = ui.get("adminStats")
+    if isinstance(stats, dict):
+        parts.append(
+            "后台统计：会话 {sessions} 个、知识库文档 {documents} 篇".format(
+                sessions=stats.get("sessions", 0),
+                documents=stats.get("documents", 0),
             )
-        docs = ui.get("knowledgeDocs") or []
-        if isinstance(docs, list) and docs:
-            parts.append("知识库文档：" + "、".join(str(name) for name in docs[:10]))
+        )
+    docs = ui.get("knowledgeDocs") or []
+    if isinstance(docs, list) and docs:
+        parts.append("知识库文档：" + "、".join(str(name) for name in docs[:10]))
     if isinstance(ui.get("visibleCards"), int):
         parts.append(f"当前筛选后可见版本卡：{ui.get('visibleCards')} 个")
     board = ui.get("boardProjects") or []
@@ -277,15 +284,22 @@ def _ui_context(ui: dict | None) -> str:
         for item in board[:12]:
             if not isinstance(item, dict):
                 continue
-            summary.append(
-                "{name}（{version} / {stage} / {advisor}）".format(
-                    name=item.get("name") or "未命名",
-                    version=item.get("version") or "-",
-                    stage=item.get("stage") or "-",
-                    advisor=item.get("advisor") or "-",
-                )
+            line = "{name}：{version} / {stage} / {advisor}".format(
+                name=item.get("name") or "未命名",
+                version=item.get("version") or "-",
+                stage=item.get("stage") or "-",
+                advisor=item.get("advisor") or "-",
             )
-        parts.append("看板项目（名称 / 当前版本 / 阶段 / 指导老师）：" + "；".join(summary))
+            if item.get("stack"):
+                line += " / " + str(item["stack"])
+            if item.get("team"):
+                line += " / 团队 " + str(item["team"])
+            if item.get("stage") == "上线" and (item.get("users") or item.get("features")):
+                line += " / 累计用户 {users}、上线功能 {features}".format(
+                    users=item.get("users", 0), features=item.get("features", 0)
+                )
+            summary.append(line)
+        parts.append("看板项目（名称：版本 / 阶段 / 指导老师 / 技术栈 / 团队）：" + "；".join(summary))
     else:
         projects = ui.get("projects") or []
         parts.append("看板上的项目：" + ("、".join(str(name) for name in projects[:20]) if projects else "未知"))
@@ -314,7 +328,7 @@ async def _stream_llm(messages: list[dict]):
         "tools": TOOLS,
         "tool_choice": "auto",
         "stream": True,
-        "temperature": 0.3,
+        "temperature": 0.2,
         "max_tokens": 400,
     }
     collected: dict[int, dict] = {}

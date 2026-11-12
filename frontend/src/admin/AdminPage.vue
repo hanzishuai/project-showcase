@@ -10,6 +10,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { refreshGlobalContext } from '../agent/context'
 import { uiState } from '../agent/uiState'
 import AdminShell from './AdminShell.vue'
 import Dashboard from './views/Dashboard.vue'
@@ -34,27 +35,8 @@ watch(active, (tab) => {
 const views = { dashboard: Dashboard, conversations: Conversations, knowledge: KnowledgeBase }
 const currentView = computed(() => views[active.value])
 
-// 把后台概览数据同步给 Agent（这样它能回答「后台有多少会话」这类问题）
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/admin/stats')
-    if (!res.ok) return
-    const data = await res.json()
-    uiState.adminStats = {
-      sessions: Number(data.total_sessions ?? 0),
-      documents: Number(data.total_documents ?? 0)
-    }
-  } catch {
-    // 统计失败不影响页面
-  }
-  try {
-    const res = await fetch('/api/v1/rag/knowledge/documents')
-    if (!res.ok) return
-    const data = await res.json()
-    const list = Array.isArray(data.data) ? data.data : []
-    uiState.knowledgeDocs = list.map((item: { name?: string }) => String(item?.name ?? '')).filter(Boolean)
-  } catch {
-    // 文档列表失败不影响页面
-  }
+// 后台数据由 agent/context 统一预取与刷新
+onMounted(() => {
+  void refreshGlobalContext()
 })
 </script>

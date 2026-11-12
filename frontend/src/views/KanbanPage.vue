@@ -326,7 +326,11 @@ watchEffect(() => {
       name: project.name,
       version: current?.number ?? '',
       stage: current ? KANBAN_STAGES[current.stage]?.name ?? '' : '',
-      advisor: project.owner
+      advisor: project.owner,
+      stack: project.stack.join('·'),
+      team: project.team,
+      users: project.users,
+      features: project.features
     }
   })
   uiState.projects = projectNames
