@@ -267,6 +267,9 @@ def _ui_context(ui: dict | None) -> str:
                     documents=stats.get("documents", 0),
                 )
             )
+        docs = ui.get("knowledgeDocs") or []
+        if isinstance(docs, list) and docs:
+            parts.append("知识库文档：" + "、".join(str(name) for name in docs[:10]))
     if isinstance(ui.get("visibleCards"), int):
         parts.append(f"当前筛选后可见版本卡：{ui.get('visibleCards')} 个")
     board = ui.get("boardProjects") or []

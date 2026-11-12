@@ -127,6 +127,7 @@ try {
         dock: rect(dock),
         stage: rect(stage),
         toasts: [...document.querySelectorAll('.arco-message')].map((e) => e.textContent.trim()),
+        lastReply: (() => { const list = document.querySelectorAll('.pp7-chat-msg'); const last = list[list.length - 1]; return last ? (last.querySelector('.pp7-chat-msg__bubble')?.textContent || '').trim() : ''; })(),
         modal: [...document.querySelectorAll('.arco-modal')].some((m) => {
           const style = getComputedStyle(m);
           return style.display !== 'none' && style.visibility !== 'hidden' && m.getBoundingClientRect().width > 0;
@@ -167,6 +168,21 @@ try {
   await ask('重建知识库索引', 4000)
   const s5 = await state()
   record('写操作不执行（无确认框）', !beforeModal && !s5.modal, JSON.stringify({ modal: s5.modal }))
+
+  // 6.5 看板事实问答：应直接回答，不打开详情
+  await ask('返回看板', 2500)
+  await ask('实验室预约系统现在什么进度', 3500)
+  const sFact = await state()
+  record('看板事实问答不弹详情', !sFact.drawerOpen, JSON.stringify({ drawer: sFact.drawerOpen }))
+  record('回答包含阶段信息', sFact.lastReply.includes('开发') || sFact.lastReply.includes('v1.2'), sFact.lastReply.slice(0, 40))
+
+  // 6.6 窗口缩放后浮层仍贴合
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+  await sleep(1200)
+  const sSmall = await state()
+  record('缩放后浮层仍贴合', !!sSmall.dock && !!sSmall.stage && sSmall.dock.x === sSmall.stage.x && Math.abs(sSmall.dock.w - sSmall.stage.w) <= 1, JSON.stringify({ dock: sSmall.dock, stage: sSmall.stage }))
+  await send('Emulation.clearDeviceMetricsOverride')
+  await sleep(800)
 
   // 7. 返回看板
   await ask('返回到看板', 3500)

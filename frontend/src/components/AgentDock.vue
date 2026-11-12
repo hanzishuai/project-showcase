@@ -98,14 +98,36 @@ const dockStyle = computed<Record<string, string>>(() => {
   }
 })
 
-const measure = () => {
+const applyMeasure = () => {
   viewport.value = { width: window.innerWidth, height: window.innerHeight }
   if (!isBoard.value) return
   const target = document.querySelector('.pet-stage')
   if (!target) return
   const box = target.getBoundingClientRect()
-  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080)
+  const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080) || 1
   boardRect.value = { left: box.left, top: box.top, scale }
+}
+
+let rafId = 0
+const measure = () => {
+  cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(applyMeasure)
+}
+
+/**
+ * #app 的等比缩放是 transform，不会触发 ResizeObserver，
+ * 所以监听它的 style 变化来捕捉 fit() 的每次更新。
+ */
+let appObserver: MutationObserver | null = null
+let observedApp: Element | null = null
+
+const observeApp = () => {
+  const appEl = document.querySelector('#app')
+  if (!appEl || appEl === observedApp) return
+  appObserver?.disconnect()
+  observedApp = appEl
+  appObserver = new MutationObserver(measure)
+  appObserver.observe(appEl, { attributes: true, attributeFilter: ['style'] })
 }
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
@@ -113,17 +135,28 @@ const onError = (message: string) => console.warn('[rag-avatar]', message)
 watch(
   () => props.page,
   async (next) => {
-    // 离开看板页时默认展开，回来时保持原状
     if (next !== 'kanban') collapsed.value = false
+    observedApp = null
     await nextTick()
-    requestAnimationFrame(measure)
+    measure()
+    observeApp()
+    setTimeout(measure, 120)
+    setTimeout(measure, 400)
   }
 )
 
 onMounted(() => {
-  requestAnimationFrame(measure)
+  measure()
+  observeApp()
   window.addEventListener('resize', measure)
+  setTimeout(measure, 120)
+  setTimeout(measure, 500)
 })
 
-onBeforeUnmount(() => window.removeEventListener('resize', measure))
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', measure)
+  appObserver?.disconnect()
+  cancelAnimationFrame(rafId)
+})
+
 </script>

@@ -21,7 +21,9 @@ export const uiState = reactive({
   /** 看板项目快照（名称/版本/阶段/指导老师），让 Agent 直接回答看板上的事实 */
   boardProjects: [] as Array<{ name: string; version: string; stage: string; advisor: string }>,
   /** 管理后台概览数据 */
-  adminStats: { sessions: 0, documents: 0 } as { sessions: number; documents: number }
+  adminStats: { sessions: 0, documents: 0 } as { sessions: number; documents: number },
+  /** 知识库文档名，让 Agent 能回答「知识库里有哪些文档」 */
+  knowledgeDocs: [] as string[]
 })
 
 export function snapshotUiState(): Record<string, unknown> {
@@ -37,6 +39,7 @@ export function snapshotUiState(): Record<string, unknown> {
     visibleCards: uiState.visibleCards,
     boardProjects: uiState.boardProjects,
     adminStats: uiState.adminStats,
+    knowledgeDocs: uiState.knowledgeDocs,
     adminTab: uiState.adminTab
   }
 }

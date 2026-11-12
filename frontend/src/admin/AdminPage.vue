@@ -47,5 +47,14 @@ onMounted(async () => {
   } catch {
     // 统计失败不影响页面
   }
+  try {
+    const res = await fetch('/api/v1/rag/knowledge/documents')
+    if (!res.ok) return
+    const data = await res.json()
+    const list = Array.isArray(data.data) ? data.data : []
+    uiState.knowledgeDocs = list.map((item: { name?: string }) => String(item?.name ?? '')).filter(Boolean)
+  } catch {
+    // 文档列表失败不影响页面
+  }
 })
 </script>

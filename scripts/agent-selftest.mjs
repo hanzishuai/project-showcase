@@ -94,6 +94,7 @@ const CASES = [
   { name: '哪些项目已经上线了？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['学术讲座预约平台'] } },
   { name: '张三指导了哪些项目？', ui: BOARD_FULL, expect: { tools: [], sayIncludes: ['实验室预约系统'] } },
   { name: '管理后台有多少个会话', ui: { page: 'admin', adminTab: 'dashboard', adminStats: { sessions: 42, documents: 3 } }, expect: { tools: [], sayIncludes: ['42'] } },
+  { name: '知识库里有哪些文档', ui: { page: 'admin', adminTab: 'knowledge', adminStats: { sessions: 1, documents: 2 }, knowledgeDocs: ['产教融合服务平台.md', '实验室预约系统说明.md'] }, expect: { tools: [], sayIncludes: ['产教融合'] } },
   {
     name: '它上线了吗',
     ui: BOARD_UI,
