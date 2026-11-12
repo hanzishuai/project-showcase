@@ -64,7 +64,8 @@ const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
 const dockEl = ref<HTMLDivElement | null>(null)
 const avatarRef = ref<{ chat?: { messages?: { value: unknown[] } } } | null>(null)
-const collapsed = ref(false)
+// 直接打开后台/编辑页时也默认收起（不依赖页面切换事件）
+const collapsed = ref(props.page !== 'kanban')
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight })
 const characterSrc = DEFAULT_CHARACTER_SRC as string
