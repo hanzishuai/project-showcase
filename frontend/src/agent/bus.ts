@@ -4,9 +4,19 @@
  * 页面在 onMounted 注册、onBeforeUnmount 注销；没有处理函数的动作会短暂排队重试，
  * 以便「先导航、再操作」这类连续动作在目标页面挂载后仍能执行。
  */
+import { Message } from '@arco-design/web-vue'
+
 export interface AgentAction {
   tool: string
   args: Record<string, unknown>
+}
+
+/** 动作执行失败时给用户的一句人话 */
+const FAILURE_TEXT: Record<string, string> = {
+  open_project: '没找到这个项目，看看名字对不对？',
+  open_gallery: '先打开一个项目的详情，才能看图。',
+  filter_board: '这个筛选条件没设上。',
+  rebuild_knowledge_index: '重建索引没有开始，可能被取消了。'
 }
 
 type Handler = (args: Record<string, unknown>) => boolean | void
@@ -26,10 +36,14 @@ function run(action: AgentAction): boolean {
   const handler = handlers.get(action.tool)
   if (!handler) return false
   try {
-    handler(action.args ?? {})
+    const result = handler(action.args ?? {})
+    if (result === false) {
+      Message.warning(FAILURE_TEXT[action.tool] ?? '这个操作没完成')
+    }
     return true
   } catch (error) {
     console.warn('[agent] action failed', action.tool, error)
+    Message.error('操作执行失败')
     return true
   }
 }

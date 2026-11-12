@@ -310,6 +310,7 @@ watchEffect(() => {
   uiState.showHistory = historyOnly.value
   uiState.openProject = selected.value?.project.name ?? ''
   uiState.modalOpen = galleryOpen.value
+  uiState.projects = projectNames
 })
 
 onMounted(() => {

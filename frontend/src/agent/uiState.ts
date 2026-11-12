@@ -10,7 +10,9 @@ export const uiState = reactive({
   openProject: '',
   adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge',
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
-  modalOpen: false
+  modalOpen: false,
+  /** 看板项目名，作为 Agent 的可用目标（避免它编造项目） */
+  projects: [] as string[]
 })
 
 export function snapshotUiState(): Record<string, unknown> {

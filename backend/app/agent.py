@@ -143,6 +143,14 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "rebuild_knowledge_index",
+            "description": "重建知识库向量索引（写操作，前端会先弹确认再执行）",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "open_admin_tab",
             "description": "打开管理后台并切到指定页签（已包含进入后台，不要再叠加 navigate_page(admin)）",
             "parameters": {
@@ -204,6 +212,11 @@ def _ui_context(ui: dict | None) -> str:
             parts.append(f"已打开详情：{ui.get('openProject')}")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
+    projects = ui.get("projects") or []
+    if isinstance(projects, list) and projects:
+        parts.append("看板上的项目：" + "、".join(str(name) for name in projects[:20]))
+    else:
+        parts.append("看板上的项目：未知")
     return "；".join(parts)
 
 
