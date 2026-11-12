@@ -184,3 +184,41 @@
   overflow:visible;
   text-overflow:clip;
 }
+
+/* 浮层的收起按钮与圆形入口（非看板页） */
+.agent-dock__toggle{
+  position:absolute;
+  top:6px;
+  right:8px;
+  z-index:3;
+  width:26px;
+  height:26px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:8px;
+  background:rgba(18,24,38,.9);
+  color:#8B98AD;
+  font-size:13px;
+  line-height:1;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.agent-dock__toggle:hover{color:#E6EDF7;border-color:rgba(34,211,238,.5)}
+.agent-dock.is-collapsed .agent-dock__toggle{top:-10px;right:-10px;border-radius:50%}
+.agent-dock__bubble{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  padding:0;
+  border-radius:50%;
+  overflow:hidden;
+  border:2px solid rgba(34,211,238,.55);
+  background:#121826;
+  cursor:pointer;
+  pointer-events:auto;
+  box-shadow:0 8px 28px rgba(0,0,0,.45);
+  transition:transform .15s ease, border-color .15s ease;
+}
+.agent-dock__bubble:hover{transform:scale(1.05);border-color:rgba(34,211,238,.9)}
+.agent-dock__bubble img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}

@@ -54,6 +54,7 @@ SYSTEM_MAP = """
 - open_project(project, version?)：按项目名打开右侧详情抽屉（version 可选）
 - close_drawer()：关闭详情抽屉
 - open_gallery(index?)：打开当前项目的图片灯箱
+- step_gallery(delta)：图片灯箱翻页，delta = -1 上一张 / 1 下一张（仅在灯箱已打开时使用；未打开时用 open_gallery）
 - close_gallery()：关闭图片灯箱
 - open_admin_tab(tab)：后台页签，tab ∈ dashboard / conversations / knowledge
 """.strip()
@@ -135,6 +136,18 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "step_gallery",
+            "description": "图片灯箱翻页：delta=-1 上一张，1 下一张",
+            "parameters": {
+                "type": "object",
+                "properties": {"delta": {"type": "integer", "enum": [-1, 1]}},
+                "required": ["delta"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "close_gallery",
             "description": "关闭图片灯箱",
             "parameters": {"type": "object", "properties": {}},
@@ -204,6 +217,10 @@ def _ui_context(ui: dict | None) -> str:
         parts.append(f"指导老师筛选：{advisor or '全部'}")
         if ui.get("openProject"):
             parts.append(f"已打开详情：{ui.get('openProject')}")
+        if ui.get("galleryOpen"):
+            parts.append(f"图片灯箱已打开（第 {int(ui.get('galleryIndex') or 0) + 1} 张）")
+        else:
+            parts.append("图片灯箱未打开")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
     projects = ui.get("projects") or []

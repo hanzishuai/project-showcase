@@ -12,7 +12,10 @@ export const uiState = reactive({
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
   /** 看板项目名，作为 Agent 的可用目标（避免它编造项目） */
-  projects: [] as string[]
+  projects: [] as string[],
+  /** 图片灯箱状态：模型据此决定是「打开图片」还是「翻页」 */
+  galleryOpen: false,
+  galleryIndex: -1
 })
 
 export function snapshotUiState(): Record<string, unknown> {
@@ -23,6 +26,8 @@ export function snapshotUiState(): Record<string, unknown> {
     advisorFilter: uiState.advisorFilter,
     showHistory: uiState.showHistory,
     openProject: uiState.openProject,
+    galleryOpen: uiState.galleryOpen,
+    galleryIndex: uiState.galleryIndex,
     adminTab: uiState.adminTab
   }
 }

@@ -295,6 +295,11 @@ const setupAgentActions = () => {
       openGallery(Number(args.index ?? 0))
       return true
     }),
+    registerAction('step_gallery', (args) => {
+      if (!selected.value || galleryIndex.value < 0) return false
+      stepGallery(Number(args.delta) >= 0 ? 1 : -1)
+      return true
+    }),
     registerAction('close_gallery', () => {
       closeGallery()
       return true
@@ -310,6 +315,8 @@ watchEffect(() => {
   uiState.showHistory = historyOnly.value
   uiState.openProject = selected.value?.project.name ?? ''
   uiState.modalOpen = galleryOpen.value
+  uiState.galleryOpen = galleryOpen.value
+  uiState.galleryIndex = galleryIndex.value
   uiState.projects = projectNames
 })
 

@@ -1,6 +1,7 @@
 <template>
-  <div v-show="!uiState.modalOpen" ref="dockEl" class="agent-dock" :style="dockStyle">
+  <div v-show="!uiState.modalOpen" ref="dockEl" class="agent-dock" :class="{ 'is-collapsed': collapsed }" :style="dockStyle">
     <RagAvatar
+      v-show="!collapsed"
       api-base-url=""
       :fetch="agentFetch"
       stream-mode="sse"
@@ -18,6 +19,29 @@
       :persist-session="true"
       @error="onError"
     />
+
+    <!-- 收起 / 展开（看板页不使用：那里是页面布局的一部分） -->
+    <button
+      v-if="!isBoard"
+      type="button"
+      class="agent-dock__toggle"
+      :title="collapsed ? '展开助手' : '收起助手'"
+      :aria-label="collapsed ? '展开助手' : '收起助手'"
+      @click="collapsed = !collapsed"
+    >
+      {{ collapsed ? '🎙' : '—' }}
+    </button>
+
+    <button
+      v-if="!isBoard && collapsed"
+      type="button"
+      class="agent-dock__bubble"
+      title="展开项目助手"
+      aria-label="展开项目助手"
+      @click="collapsed = false"
+    >
+      <img :src="characterSrc" alt="" />
+    </button>
   </div>
 </template>
 
@@ -26,21 +50,28 @@
  * 数字人的全局挂载点：跨页面常驻。
  *
  * - 在看板页：精确贴合 .pet-stage（600×864）并按舞台缩放，视觉与之前一致；
- * - 在数据修改 / 管理后台：缩成右下角浮层，继续可用；
+ * - 在数据修改 / 管理后台：缩成右下角浮层，可最小化成圆形入口；
  * - 全屏灯箱打开时隐藏，避免压在遮罩上。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import RagAvatar from '../../vendor/rag-avatar/rag-avatar.js'
+import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
 import { agentFetch } from '../agent/fetch'
 import { uiState } from '../agent/uiState'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
 const dockEl = ref<HTMLDivElement | null>(null)
+const collapsed = ref(false)
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight })
+const characterSrc = DEFAULT_CHARACTER_SRC as string
 
 const isBoard = computed(() => props.page === 'kanban')
+
+const FLOAT_WIDTH = 380
+const FLOAT_HEIGHT = 620
+const BUBBLE = 88
+const MARGIN = 24
 
 const dockStyle = computed<Record<string, string>>(() => {
   if (isBoard.value) {
@@ -53,10 +84,11 @@ const dockStyle = computed<Record<string, string>>(() => {
       transformOrigin: 'top left'
     }
   }
-  const width = 380
-  const height = 620
-  const left = Math.max(16, viewport.value.width - width - 24)
-  const top = Math.max(16, viewport.value.height - height - 24)
+  const shrink = collapsed.value
+  const width = shrink ? BUBBLE : FLOAT_WIDTH
+  const height = shrink ? BUBBLE : FLOAT_HEIGHT
+  const left = Math.max(16, viewport.value.width - width - MARGIN)
+  const top = Math.max(16, viewport.value.height - height - MARGIN)
   return {
     left: left + 'px',
     top: top + 'px',
@@ -80,7 +112,9 @@ const onError = (message: string) => console.warn('[rag-avatar]', message)
 
 watch(
   () => props.page,
-  async () => {
+  async (next) => {
+    // 离开看板页时默认展开，回来时保持原状
+    if (next !== 'kanban') collapsed.value = false
     await nextTick()
     requestAnimationFrame(measure)
   }
