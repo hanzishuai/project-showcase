@@ -176,6 +176,13 @@ try {
   record('看板事实问答不弹详情', !sFact.drawerOpen, JSON.stringify({ drawer: sFact.drawerOpen }))
   record('回答包含阶段信息', sFact.lastReply.includes('开发') || sFact.lastReply.includes('v1.2'), sFact.lastReply.slice(0, 40))
 
+  // 6.55 复合指令：动作 + 同时回答
+  await ask('打开学术讲座预约平台，顺便说说它有多少用户', 4500)
+  const sCompound = await state()
+  record('复合指令执行了动作', sCompound.drawerOpen, JSON.stringify({ drawer: sCompound.drawerOpen }))
+  record('复合指令同时回答了数据', sCompound.lastReply.includes('1260'), sCompound.lastReply.slice(0, 50))
+  await ask('把详情关了', 2500)
+
   // 6.6 窗口缩放后浮层仍贴合
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
   await sleep(1200)

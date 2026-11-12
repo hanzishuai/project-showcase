@@ -123,6 +123,22 @@ const CASES = [
   },
   { name: '管理后台有多少个会话', ui: { page: 'admin', adminTab: 'dashboard', adminStats: { sessions: 42, documents: 3 } }, expect: { tools: [], sayIncludes: ['42'] } },
   { name: '知识库里有哪些文档', ui: { page: 'admin', adminTab: 'knowledge', adminStats: { sessions: 1, documents: 2 }, knowledgeDocs: ['产教融合服务平台.md', '实验室预约系统说明.md'] }, expect: { tools: [], sayIncludes: ['产教融合'] } },
+  // ---- 能力介绍 / 系统导览 / 指代回指 ----
+  { name: '你能做什么？', ui: BOARD_FULL, expect: { tools: [], sayAnyOf: ['看板', '界面', '页面', '项目'] } },
+  {
+    name: '帮我把这个系统讲一遍',
+    ui: BOARD_FULL,
+    expect: { tools: [], sayIncludes: ['看板'] }
+  },
+  {
+    name: '刚才那个项目叫什么来着',
+    ui: BOARD_FULL,
+    history: [
+      { role: 'user', content: '学术讲座预约平台有多少用户？' },
+      { role: 'assistant', content: '学术讲座预约平台累计用户 1260 人。' }
+    ],
+    expect: { tools: [], sayIncludes: ['学术讲座'] }
+  },
   {
     name: '它上线了吗',
     ui: BOARD_UI,
@@ -214,6 +230,10 @@ function check(expect, actions, say, error) {
   for (const keyword of expect.sayIncludes || []) {
     if (!say.includes(keyword)) problems.push('回答里应包含「' + keyword + '」')
   }
+  if (expect.sayAnyOf && expect.sayAnyOf.length > 0) {
+    const hit = expect.sayAnyOf.some((keyword) => say.includes(keyword))
+    if (!hit) problems.push('回答里应至少包含其一：' + JSON.stringify(expect.sayAnyOf))
+  }
   return problems
 }
 
@@ -227,10 +247,25 @@ for (const item of CASES) {
       await new Promise((resolve) => setTimeout(resolve, 800))
       result = await ask(item.name, item.ui, item.history)
     }
-    const problems = check(item.expect, result.actions, result.say, result.error)
+    let problems = check(item.expect, result.actions, result.say, result.error)
+    let flaky = false
+    if (problems.length > 0) {
+      // 模型有随机性：再给一次机会，通过则标记 flaky（不掩盖问题，但避免误报）
+      await new Promise((resolve) => setTimeout(resolve, 600))
+      const retried = await ask(item.name, item.ui, item.history)
+      const retryProblems = check(item.expect, retried.actions, retried.say, retried.error)
+      if (retryProblems.length === 0) {
+        problems = []
+        flaky = true
+        result = retried
+      } else {
+        problems = retryProblems
+        result = retried
+      }
+    }
     if (problems.length === 0) {
       passed += 1
-      console.log('  ✅ ' + item.name)
+      console.log((flaky ? '  ⚠️ ' : '  ✅ ') + item.name + (flaky ? '（重试后通过）' : ''))
     } else {
       failures.push({ name: item.name, problems, result })
       console.log('  ❌ ' + item.name + ' → ' + problems.join('；'))

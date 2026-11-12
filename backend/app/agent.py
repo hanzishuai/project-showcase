@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from pp7rag.config import settings
 from pp7rag.engine.prompts import format_references
-from pp7rag.ragapi import retrieval
+from pp7rag.ragapi import qa_log, retrieval
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +190,11 @@ async def close_http_client() -> None:
 _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既能回答平台资料里的问题，也能直接操作这个系统的界面。
 
 {system_map}
+
+## 指代消歧（重要）
+- 「这个系统 / 这个页面 / 这个界面 / 这里 / 现在这页」指的是用户当前看到的界面，以「当前界面」里的数据为准；
+  【参考资料】里介绍的是平台上的某个项目，不要把它当成"系统本身"，也不要用它替换界面里显示的内容。
+- 用户问界面（有什么、怎么用、怎么操作）时，不要引用资料里的项目数据；只有问到具体项目/业务细节时才用资料。
 
 ## 工作方式
 1. 用户要求「打开/切到/筛选/看看某个项目/返回」时，调用对应动作；动作参数必须来自系统地图或用户原话，不要猜项目名。
@@ -477,6 +482,22 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
             return
 
         text = "".join(text_parts)
+        # 与管理后台共用同一份问答日志（否则切到 Agent 后「对话记录」会停止增长）
+        try:
+            await qa_log.log_turn(
+                request_id=request_id,
+                session_id=session_id,
+                question=question,
+                answer=text,
+                sources=[],
+                timings={"total": int((time.perf_counter() - started) * 1000)},
+                model=settings.llm_model,
+                style="agent",
+                history_messages=len(request.history or []),
+            )
+        except Exception as exc:  # 日志失败不影响回答
+            logger.warning("agent_qa_log_failed: %s", exc)
+
         yield _sse("done", {
             "session_id": session_id,
             "request_id": request_id,
