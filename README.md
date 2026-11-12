@@ -101,6 +101,15 @@ project-showcase/
 - 验收：`_temp/2026-11-10-ui-polish-verify.json` 22/22、`_temp/2026-11-10-route-verify.json` 25/25、`npm run build` 39 modules、后端 `pytest` 9 passed、旧静态页 `node --test` 15/15。
 - 2026-11-10 后续按 EditHere 批注把总览页双图表改为「软件生命周期环节」面板（六段 × 3 个项目维护状态），右侧环形图删除；证据见 `_temp/2026-11-10-lifecycle-verify.json`。
 
+## 实验分支：可操控界面的数字人 Agent
+
+分支 `feat/agent-ui-control`（不影响 main）。数字人除了回答问题，还能听懂「打开管理后台」「只看张三的项目」「看下一张图」这类话并直接操作界面：
+LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作总线执行（8 个只读动作，不执行任何写操作）。
+
+- 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
+- 自测：`node scripts/agent-selftest.mjs`（35 条指令用例）、`node scripts/agent-ui-selftest.mjs`（13 项浏览器 DOM 断言）。
+- 说明：`docs/2026-11-12-agent-ui-control.md`。
+
 ## REST API
 
 | 方法 | 路径 | 说明 |

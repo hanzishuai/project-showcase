@@ -18,7 +18,7 @@ const ADMIN_UI = { page: 'admin', adminTab: 'dashboard', openProject: '' }
 
 /** expect.tools: 必须调用的工具（按需校验参数子集）；forbid: 不允许出现的工具 */
 const CASES = [
-  { name: '打开管理后台', ui: BOARD_UI, expect: { tools: [{ tool: 'navigate_page', args: { page: 'admin' } }] } },
+  { name: '打开管理后台', ui: BOARD_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'dashboard' } }] }, forbid: ['navigate_page'] },
   { name: '打开管理后台的知识库页面', ui: BOARD_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'knowledge' } }], forbid: ['navigate_page'] } },
   { name: '打开对话记录', ui: ADMIN_UI, expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'conversations' } }] } },
   { name: '把看板切到数据总览', ui: BOARD_UI, expect: { tools: [{ tool: 'set_board_view', args: { view: 'overview' } }] } },
@@ -68,6 +68,10 @@ const CASES = [
     ],
     expect: { tools: [{ tool: 'open_project', args: { project: '科研成果管理平台' } }] },
   },
+  { name: '现在还剩几个项目', ui: { ...BOARD_UI, advisorFilter: '张三', visibleCards: 1 }, expect: { tools: [] } },
+  { name: '把筛选清空', ui: { ...BOARD_UI, projectFilter: '实验室预约系统', advisorFilter: '张三' }, expect: { tools: [{ tool: 'filter_board' }] } },
+  { name: '把它关了', ui: { ...BOARD_UI, openProject: '实验室预约系统' }, expect: { tools: [{ tool: 'close_drawer' }] } },
+  { name: '学术讲座预约平台在哪一列', ui: { ...BOARD_UI, boardProjects: [{ name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪' }] }, expect: { tools: [] } },
   {
     name: '它上线了吗',
     ui: BOARD_UI,

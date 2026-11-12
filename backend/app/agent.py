@@ -197,6 +197,8 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
 2. 用户问资料类问题（平台是什么、项目进度、怎么用）时，参考【参考资料】回答，不要调用动作。
 3. 一次最多调用 {max_actions} 个动作；能用一个动作解决就别拆成多个。
 4. 说完话再动作用一句话衔接，例如「这就打开给你看」。不要描述技术细节，不要说「调用工具」。
+   用户只是询问信息（某个项目在哪一列、什么阶段、谁指导、总共几个）时，直接用「当前界面」里的看板数据回答，
+   不要为了回答而打开详情或切换页面；只有用户明确说「打开 / 看看 / 切到 / 跳到」时才调用动作。
    用户指名后台的某个页签（工作概览/对话记录/知识库管理）时，只用 open_admin_tab，不要再叠加 navigate_page(admin)。
 5. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
    用户要求这类操作时，告诉他去哪个页面的哪个按钮自己做，不要调用动作、也不要假装已经做了。
@@ -257,11 +259,26 @@ def _ui_context(ui: dict | None) -> str:
             parts.append("图片灯箱未打开")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
-    projects = ui.get("projects") or []
-    if isinstance(projects, list) and projects:
-        parts.append("看板上的项目：" + "、".join(str(name) for name in projects[:20]))
+    if isinstance(ui.get("visibleCards"), int):
+        parts.append(f"当前筛选后可见版本卡：{ui.get('visibleCards')} 个")
+    board = ui.get("boardProjects") or []
+    if isinstance(board, list) and board:
+        summary = []
+        for item in board[:12]:
+            if not isinstance(item, dict):
+                continue
+            summary.append(
+                "{name}（{version} / {stage} / {advisor}）".format(
+                    name=item.get("name") or "未命名",
+                    version=item.get("version") or "-",
+                    stage=item.get("stage") or "-",
+                    advisor=item.get("advisor") or "-",
+                )
+            )
+        parts.append("看板项目（名称 / 当前版本 / 阶段 / 指导老师）：" + "；".join(summary))
     else:
-        parts.append("看板上的项目：未知")
+        projects = ui.get("projects") or []
+        parts.append("看板上的项目：" + ("、".join(str(name) for name in projects[:20]) if projects else "未知"))
     return "；".join(parts)
 
 

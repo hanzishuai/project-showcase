@@ -319,6 +319,16 @@ watchEffect(() => {
   uiState.modalOpen = galleryOpen.value
   uiState.galleryOpen = galleryOpen.value
   uiState.galleryIndex = galleryIndex.value
+  uiState.visibleCards = filteredVersions.value.length
+  uiState.boardProjects = KANBAN_PROJECTS.map((project) => {
+    const current = versions.find((item) => item.project.name === project.name && item.current)
+    return {
+      name: project.name,
+      version: current?.number ?? '',
+      stage: current ? KANBAN_STAGES[current.stage]?.name ?? '' : '',
+      advisor: project.owner
+    }
+  })
   uiState.projects = projectNames
 })
 
