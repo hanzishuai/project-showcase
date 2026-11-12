@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 MAX_ACTIONS = 4
-TOKEN_CHUNK = 6
 
 # ---------------------------------------------------------------------------
 # 系统地图：模型据此知道系统里有什么、能做什么
