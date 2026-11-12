@@ -235,7 +235,7 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _history_text(history: list[dict] | None, limit: int = 4, chars: int = 240) -> str:
+def _history_text(history: list[dict] | None, limit: int = 8, chars: int = 240) -> str:
     """最近几轮对话，渲染成给模型看的纯文本；只保留 user/assistant。"""
     if not history:
         return "无"

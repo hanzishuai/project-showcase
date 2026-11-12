@@ -12,15 +12,40 @@ interface Turn {
   content: string
 }
 
-/** 最近几轮问答（前端内存维护），随请求带给模型用于理解「它 / 那个项目」 */
-const HISTORY_LIMIT = 6
-const history: Turn[] = []
+/** 最近几轮问答：随请求带给模型理解指代，并持久化到 sessionStorage（刷新后仍能接上） */
+const HISTORY_LIMIT = 12
+const HISTORY_KEY = 'agent-chat-history-v1'
+
+function loadHistory(): Turn[] {
+  try {
+    const raw = sessionStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is Turn => !!item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+      .slice(-HISTORY_LIMIT)
+  } catch {
+    return []
+  }
+}
+
+const history: Turn[] = loadHistory()
+
+function saveHistory(): void {
+  try {
+    sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  } catch {
+    // 存储不可用时忽略（隐私模式等）
+  }
+}
 
 function pushTurn(role: Turn['role'], content: string): void {
   const text = content.trim()
   if (!text) return
   history.push({ role, content: text })
   while (history.length > HISTORY_LIMIT) history.shift()
+  saveHistory()
 }
 
 const RAG_ASK = '/api/v1/rag/ask'

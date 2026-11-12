@@ -217,6 +217,14 @@ try {
   record('返回看板', s6.hash === '#/' && s6.board, JSON.stringify({ hash: s6.hash, board: s6.board }))
   record('浮层重新贴合', !!s6.dock && !!s6.stage && s6.dock.x === s6.stage.x, JSON.stringify({ dock: s6.dock, stage: s6.stage }))
 
+  // 8. 刷新后仍记得上下文（历史持久化在 sessionStorage）
+  await ask('学术讲座预约平台有多少用户？', 5000)
+  await send('Page.reload')
+  await sleep(8000)
+  await ask('刚才那个项目叫什么来着？', 5000)
+  const sReload = await state()
+  record('刷新后仍能指代', sReload.lastReply.includes('学术讲座'), sReload.lastReply.slice(0, 40))
+
   record('无前端报错', errors.length === 0, JSON.stringify(errors.slice(0, 3)))
   ws.close()
 } catch (error) {
