@@ -8,10 +8,8 @@ import {
   type KanbanProject,
   type KanbanVersion
 } from '../kanban/data'
-import RagAvatar from '../../vendor/rag-avatar/rag-avatar.js'
 import { registerAction } from '../agent/bus'
 import { uiState } from '../agent/uiState'
-import { agentFetch } from '../agent/fetch'
 
 interface VersionView extends KanbanVersion {
   id: string
@@ -25,8 +23,7 @@ const kanbanData = loadKanbanData()
 const KANBAN_STAGES = kanbanData.stages
 const KANBAN_PROJECTS = kanbanData.projects
 
-// 数字人：走同源 RAG 后端（/api/v1/rag，由 backend/pp7rag 提供），问答、语音识别与合成都在服务端。
-const onRagError = (message: string) => console.warn('[rag-avatar]', message)
+// 数字人已移到全局浮层（components/AgentDock.vue），这里只负责把界面状态同步过去并注册可被调用的动作。
 
 const appEl = ref<HTMLDivElement | null>(null)
 const stageChartEl = ref<HTMLDivElement | null>(null)
@@ -312,6 +309,7 @@ watchEffect(() => {
   uiState.advisorFilter = ownerFilter.value
   uiState.showHistory = historyOnly.value
   uiState.openProject = selected.value?.project.name ?? ''
+  uiState.modalOpen = galleryOpen.value
 })
 
 onMounted(() => {
@@ -432,26 +430,8 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="board-main">
-        <div class="pet-stage">
-          <RagAvatar
-            api-base-url=""
-            :fetch="agentFetch"
-            stream-mode="sse"
-            position="bottom-left"
-            :width="600"
-            :height="864"
-            theme="dark"
-            title="项目实践聚合平台 AI 助手"
-            placeholder="问我问题，或点麦克风说话"
-            :enable-voice="true"
-            :auto-speak="true"
-            :show-sources="true"
-            :suggestions="true"
-            :vad="true"
-            :persist-session="true"
-            @error="onRagError"
-          />
-        </div>
+        <!-- 左侧 600px 留白区：数字人已移到全局浮层（AgentDock），这里只保留布局占位 -->
+        <div class="pet-stage" aria-hidden="true"></div>
         <div class="lanes">
         <section v-for="(lane, laneIndex) in lanes" :key="lane.name" class="lane">
           <div class="lane-head">

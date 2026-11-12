@@ -8,7 +8,9 @@ export const uiState = reactive({
   advisorFilter: '',
   showHistory: false,
   openProject: '',
-  adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge'
+  adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge',
+  /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
+  modalOpen: false
 })
 
 export function snapshotUiState(): Record<string, unknown> {

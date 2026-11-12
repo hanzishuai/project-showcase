@@ -17,7 +17,10 @@
 .lightbox-nav:hover,.lightbox-close:hover{background:#2A3550}
 .lightbox-caption{margin-top:16px;color:var(--muted);font-size:13px;letter-spacing:.02em}
 .board-main{display:flex;gap:16px;flex:1;min-height:0}
-.pet-stage{position:relative;width:600px;flex:none;pointer-events:auto;--pp7-z-index:2;border-radius:12px}
+.pet-stage{position:relative;width:600px;flex:none;pointer-events:none;border-radius:12px}
+/* 数字人全局浮层：看板页贴合 .pet-stage，其它页缩到右下角 */
+.agent-dock{position:fixed;z-index:8;pointer-events:none;transform-origin:top left;--pp7-z-index:1}
+.agent-dock > *{pointer-events:auto}
 .usage-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .usage-stat{position:relative;background:#171F2F;border:1px solid var(--line);border-radius:12px;padding:14px 14px 13px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
 .usage-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.9}
@@ -102,19 +105,19 @@
 
 /* ------------------------- 数字人（PP7 RAG 数字人组件） ------------------------- */
 /* 左侧 600px 留白区：上半部分人物立绘，下半部分对话面板。 */
-.board-main .pet-stage .pp7-rag-avatar{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;transform:none;z-index:2}
-.board-main .pet-stage .pp7-rag-avatar__stage{flex:0 0 55%;min-height:0}
+.agent-dock .pp7-rag-avatar{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;transform:none;z-index:2}
+.agent-dock .pp7-rag-avatar__stage{flex:0 0 55%;min-height:0}
 /* 立绘按 600 宽裁成半身（cover）：人物更有存在感，下缘自然被对话框挡住 */
-.board-main .pet-stage .pp7-avatar-figure,
-.board-main .pet-stage .pp7-avatar-sway,
-.board-main .pet-stage .pp7-avatar-inner{width:100%}
-.board-main .pet-stage .pp7-avatar-image{width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;object-position:top center}
-.board-main .pet-stage .pp7-rag-avatar__panel{width:100%;min-height:0}
-.board-main .pet-stage .pp7-chat-panel{border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.agent-dock .pp7-avatar-figure,
+.agent-dock .pp7-avatar-sway,
+.agent-dock .pp7-avatar-inner{width:100%}
+.agent-dock .pp7-avatar-image{width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;object-position:top center}
+.agent-dock .pp7-rag-avatar__panel{width:100%;min-height:0}
+.agent-dock .pp7-chat-panel{border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
 /* 主题色对齐看板深色 token（--bg/--panel/--line/--text/--muted + 品牌青） */
-.pet-stage .pp7-rag-avatar[data-theme='dark'],
-.pet-stage .pp7-chat-panel[data-theme='dark'],
-.pet-stage .pp7-avatar-stage[data-theme='dark']{
+.agent-dock .pp7-rag-avatar[data-theme='dark'],
+.agent-dock .pp7-chat-panel[data-theme='dark'],
+.agent-dock .pp7-avatar-stage[data-theme='dark']{
   --pp7-panel-bg:rgba(18,24,38,.94);
   --pp7-panel-border:rgba(255,255,255,.06);
   --pp7-header-bg:rgba(255,255,255,.02);
@@ -140,7 +143,7 @@
 
 
 /* 参考资料：从「大卡片」压成一行「来源：文档名」 */
-.board-main .pet-stage .pp7-chat-sources{
+.agent-dock .pp7-chat-sources{
   max-width:100%;
   margin:2px 0 0;
   font-size:11px;
@@ -151,30 +154,30 @@
   gap:6px;
   flex-wrap:wrap;
 }
-.board-main .pet-stage .pp7-chat-sources::before{content:'来源：';color:#5A667A}
-.board-main .pet-stage .pp7-chat-sources__caption{display:none}
-.board-main .pet-stage .pp7-chat-sources ul{
+.agent-dock .pp7-chat-sources::before{content:'来源：';color:#5A667A}
+.agent-dock .pp7-chat-sources__caption{display:none}
+.agent-dock .pp7-chat-sources ul{
   flex-direction:row;
   flex-wrap:wrap;
   gap:4px 14px;
   margin:0;
   padding:0;
 }
-.board-main .pet-stage .pp7-chat-sources li,
-.board-main .pet-stage .pp7-chat-sources__item{
+.agent-dock .pp7-chat-sources li,
+.agent-dock .pp7-chat-sources__item{
   padding:0;
   border:0;
   background:none;
   border-radius:0;
   box-shadow:none;
 }
-.board-main .pet-stage .pp7-chat-sources__head{gap:6px;justify-content:flex-start}
-.board-main .pet-stage .pp7-chat-sources__badge,
-.board-main .pet-stage .pp7-chat-sources__score,
-.board-main .pet-stage .pp7-chat-sources__snippet,
-.board-main .pet-stage .pp7-chat-sources__toggle,
-.board-main .pet-stage .pp7-chat-sources__full{display:none}
-.board-main .pet-stage .pp7-chat-sources__title{
+.agent-dock .pp7-chat-sources__head{gap:6px;justify-content:flex-start}
+.agent-dock .pp7-chat-sources__badge,
+.agent-dock .pp7-chat-sources__score,
+.agent-dock .pp7-chat-sources__snippet,
+.agent-dock .pp7-chat-sources__toggle,
+.agent-dock .pp7-chat-sources__full{display:none}
+.agent-dock .pp7-chat-sources__title{
   color:#8B98AD;
   font-weight:400;
   white-space:normal;

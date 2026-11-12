@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import KanbanPage from './views/KanbanPage.vue'
 import DataEditPage from './views/DataEditPage.vue'
 import AdminPage from './admin/AdminPage.vue'
+import AgentDock from './components/AgentDock.vue'
 import { registerAction } from './agent/bus'
 import { uiState } from './agent/uiState'
 
@@ -64,4 +65,6 @@ onBeforeUnmount(() => {
   <AdminPage v-if="route === 'admin'" @back="goKanban" />
   <DataEditPage v-else-if="route === 'edit'" />
   <KanbanPage v-else />
+  <!-- 数字人全局浮层：跨页面常驻，看板页贴合左侧留白区 -->
+  <AgentDock :page="route" />
 </template>
