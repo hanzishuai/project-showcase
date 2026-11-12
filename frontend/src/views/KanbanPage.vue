@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import {
   KANBAN_TREND,
   KANBAN_WEEKS,
@@ -9,6 +9,9 @@ import {
   type KanbanVersion
 } from '../kanban/data'
 import RagAvatar from '../../vendor/rag-avatar/rag-avatar.js'
+import { registerAction } from '../agent/bus'
+import { uiState } from '../agent/uiState'
+import { agentFetch } from '../agent/fetch'
 
 interface VersionView extends KanbanVersion {
   id: string
@@ -254,11 +257,69 @@ const showOverview = async () => {
 
 watch(activeView, showOverview)
 
+/* ---------------------- Agent：把看板操作暴露给数字人 ---------------------- */
+
+const agentOffs: Array<() => void> = []
+
+const setupAgentActions = () => {
+  agentOffs.push(
+    registerAction('set_board_view', (args) => {
+      const view = String(args.view ?? 'board')
+      if (view !== 'board' && view !== 'overview') return false
+      switchView(view)
+      return true
+    }),
+    registerAction('filter_board', (args) => {
+      if ('project' in args) projectFilter.value = String(args.project ?? '')
+      if ('advisor' in args) ownerFilter.value = String(args.advisor ?? '')
+      if ('show_history' in args) historyOnly.value = Boolean(args.show_history)
+      if (activeView.value !== 'board') switchView('board')
+      return true
+    }),
+    registerAction('open_project', (args) => {
+      const name = String(args.project ?? '').trim()
+      const version = String(args.version ?? '').trim()
+      if (!name) return false
+      const exact = versions.find((item) => item.project.name === name && (!version || item.number === version))
+      const target =
+        exact ??
+        versions.find((item) => item.project.name.includes(name) || name.includes(item.project.name))
+      if (!target) return false
+      switchView('board')
+      openDrawer(target.id)
+      return true
+    }),
+    registerAction('close_drawer', () => {
+      closeDrawer()
+      return true
+    }),
+    registerAction('open_gallery', (args) => {
+      if (!selected.value) return false
+      openGallery(Number(args.index ?? 0))
+      return true
+    }),
+    registerAction('close_gallery', () => {
+      closeGallery()
+      return true
+    })
+  )
+}
+
+// 把看板状态同步给 Agent 作为上下文
+watchEffect(() => {
+  uiState.boardView = activeView.value
+  uiState.projectFilter = projectFilter.value
+  uiState.advisorFilter = ownerFilter.value
+  uiState.showHistory = historyOnly.value
+  uiState.openProject = selected.value?.project.name ?? ''
+})
+
 onMounted(() => {
   fit()
   window.addEventListener('resize', fit)
   document.addEventListener('keydown', onKeydown)
   showOverview()
+  setupAgentActions()
 })
 
 onBeforeUnmount(() => {
@@ -266,6 +327,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
   charts.forEach((chart) => chart.dispose())
   charts = []
+  agentOffs.splice(0).forEach((off) => off())
 })
 </script>
 
@@ -373,6 +435,8 @@ onBeforeUnmount(() => {
         <div class="pet-stage">
           <RagAvatar
             api-base-url=""
+            :fetch="agentFetch"
+            stream-mode="sse"
             position="bottom-left"
             :width="600"
             :height="864"

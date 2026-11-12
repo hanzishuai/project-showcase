@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import APP_TITLE, APP_VERSION, CORS_ORIGINS, FRONTEND_DIST, REPO_ROOT
 from .db import SessionLocal, init_db
 from .admin_compat import router as admin_router
+from .agent import router as agent_router
 from pp7rag.ragapi.routes import router as rag_router
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,8 @@ app.include_router(api_router)
 app.include_router(rag_router)
 # 管理后台：会话/统计（映射到 RAG 的 SQLite 问答日志）
 app.include_router(admin_router)
+# 实验：语义操作界面的 Agent（白名单动作 + LLM function calling）
+app.include_router(agent_router)
 
 MEDIA_DIR = REPO_ROOT / "assets" / "images"
 if MEDIA_DIR.exists():

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import KanbanPage from './views/KanbanPage.vue'
 import DataEditPage from './views/DataEditPage.vue'
 import AdminPage from './admin/AdminPage.vue'
+import { registerAction } from './agent/bus'
+import { uiState } from './agent/uiState'
 
 const hash = ref(window.location.hash)
 const syncRoute = () => {
@@ -19,8 +21,43 @@ const goKanban = () => {
   window.location.hash = '#/'
 }
 
-onMounted(() => window.addEventListener('hashchange', syncRoute))
-onBeforeUnmount(() => window.removeEventListener('hashchange', syncRoute))
+const PAGE_HASH: Record<string, string> = { board: '#/', edit: '#/edit', admin: '#/admin' }
+
+watch(
+  route,
+  (value) => {
+    uiState.page = value === 'kanban' ? 'board' : value
+  },
+  { immediate: true }
+)
+
+let offs: Array<() => void> = []
+
+onMounted(() => {
+  window.addEventListener('hashchange', syncRoute)
+  offs = [
+    registerAction('navigate_page', (args) => {
+      const page = String(args.page ?? '')
+      const hash = PAGE_HASH[page]
+      if (!hash) return false
+      window.location.hash = hash
+      return true
+    }),
+    // 同时处理「跳到后台 + 指定页签」，避免依赖 AdminPage 的挂载时机
+    registerAction('open_admin_tab', (args) => {
+      const tab = String(args.tab ?? 'dashboard')
+      if (!['dashboard', 'conversations', 'knowledge'].includes(tab)) return false
+      uiState.adminTab = tab as typeof uiState.adminTab
+      window.location.hash = '#/admin'
+      return true
+    })
+  ]
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('hashchange', syncRoute)
+  offs.splice(0).forEach((off) => off())
+})
 </script>
 
 <template>
