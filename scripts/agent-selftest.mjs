@@ -130,6 +130,24 @@ const CASES = [
   },
   { name: '管理后台有多少个会话', ui: { page: 'admin', adminTab: 'dashboard', adminStats: { sessions: 42, documents: 3 } }, expect: { tools: [], sayIncludes: ['42'] } },
   { name: '知识库里有哪些文档', ui: { page: 'admin', adminTab: 'knowledge', adminStats: { sessions: 1, documents: 2 }, knowledgeDocs: ['产教融合服务平台.md', '实验室预约系统说明.md'] }, expect: { tools: [], sayIncludes: ['产教融合'] } },
+  // ---- 多动作时序 ----
+  {
+    name: '把详情关了，再切到数据总览',
+    ui: { ...BOARD_UI, openProject: '实验室预约系统' },
+    expect: { tools: [{ tool: 'close_drawer' }, { tool: 'set_board_view', args: { view: 'overview' } }] }
+  },
+  {
+    name: '先回到看板，再打开学术讲座预约平台的详情',
+    ui: { page: 'admin', adminTab: 'knowledge' },
+    // open_project 本身会切回看板并打开详情，所以只要求它出现；navigate 可有可无
+    expect: { tools: [{ tool: 'open_project', args: { project: '学术讲座预约平台' } }] }
+  },
+  {
+    name: '打开管理后台，切到知识库管理，再说说有几篇文档',
+    ui: { ...BOARD_FULL, adminStats: { sessions: 42, documents: 1 }, knowledgeDocs: ['产教融合服务平台.md'] },
+    expect: { tools: [{ tool: 'open_admin_tab', args: { tab: 'knowledge' } }], sayIncludes: ['1'] }
+  },
+
   // ---- 能力介绍 / 系统导览 / 指代回指 ----
   { name: '你能做什么？', ui: BOARD_FULL, expect: { tools: [], sayAnyOf: ['看板', '界面', '页面', '项目'] } },
   {

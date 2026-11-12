@@ -6,6 +6,13 @@
  */
 const BASE = process.env.AGENT_BASE || 'http://127.0.0.1:8000'
 const ROUNDS = Number(process.argv[2] || 20)
+const argValue = (name, fallback) => {
+  const hit = process.argv.find((item) => item.startsWith('--' + name + '='))
+  return hit ? Number(hit.split('=')[1]) : fallback
+}
+// 性能回归阈值：超过就退出码 1（可命令行覆盖）
+const MAX_TTFT_P90 = argValue('max-p90', 1800)
+const MAX_TOTAL_P90 = argValue('max-total-p90', 2200)
 
 const BOARD = [
   { name: '实验室预约系统', version: 'v1.2', stage: '开发', advisor: '张三', stack: 'Vue 3·Spring Boot·MySQL', team: '张三、李宁、王琳', users: 0, features: 0 },
@@ -118,4 +125,16 @@ for (const kind of ['动作', '事实', '复合']) {
   console.log('  ' + kind + '  样本=' + list.length + '  首字 P50=' + Math.round(percentile(values, 50)) + 'ms  P90=' + Math.round(percentile(values, 90)) + 'ms')
 }
 
-if (ok.length !== rows.length) process.exit(1)
+let failed = ok.length !== rows.length
+const ttftP90 = percentile(ttfts, 90)
+const totalP90 = percentile(totals, 90)
+if (ttftP90 > MAX_TTFT_P90) {
+  console.log('\n⚠️ 性能回归：首字 P90 ' + Math.round(ttftP90) + 'ms 超过阈值 ' + MAX_TTFT_P90 + 'ms')
+  failed = true
+}
+if (totalP90 > MAX_TOTAL_P90) {
+  console.log('⚠️ 性能回归：总耗时 P90 ' + Math.round(totalP90) + 'ms 超过阈值 ' + MAX_TOTAL_P90 + 'ms')
+  failed = true
+}
+if (!failed) console.log('\n阈值检查通过（首字 P90 ≤ ' + MAX_TTFT_P90 + 'ms，总耗时 P90 ≤ ' + MAX_TOTAL_P90 + 'ms）')
+if (failed) process.exit(1)

@@ -228,7 +228,9 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
    动作照做，同时把那半句问题也答了。
    例：问「打开后台，顺便告诉我有多少会话」→ 动作 open_admin_tab(dashboard)，话术「这就打开后台，目前累计【N】个会话」。
    例：问「打开实验室预约系统，说说技术栈」→ 动作 open_project(实验室预约系统)，话术「这就打开，它用的是【技术栈】」。
-7. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
+7. **说到就要做到**：话了里说「这就打开/切到/关掉」，就必须真的调用对应动作；
+   如果这次不想或不能操作，就不要说已经做了，改成询问或说明。
+8. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
    用户要求这类操作时，告诉他去哪个页面的哪个按钮自己做，不要调用动作、也不要假装已经做了。
 5. 动作执行不了（比如项目名不在系统里）时，直接说明没有这个项目，不要硬开。
 
@@ -427,6 +429,65 @@ async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_
     yield ("tool_calls", collected)
 
 
+# 每个动作的必填参数；模型偶尔给空参数，需要兜底
+REQUIRED_ARGS: dict[str, tuple[str, ...]] = {
+    "navigate_page": ("page",),
+    "set_board_view": ("view",),
+    "open_project": ("project",),
+    "open_admin_tab": ("tab",),
+}
+
+
+def _repair_actions(actions: list[dict], question: str, text: str, ui: dict | None) -> tuple[list[dict], list[str]]:
+    """修掉模型给的空参数：缺项目名就从问题/回答/看板上下文里找；找不到就丢弃并记一句提示。"""
+    projects = []
+    if isinstance(ui, dict):
+        raw = ui.get("projects") or []
+        if isinstance(raw, list):
+            projects = [str(name) for name in raw if str(name).strip()]
+        if not projects:
+            board = ui.get("boardProjects") or []
+            if isinstance(board, list):
+                projects = [str(item.get("name")) for item in board if isinstance(item, dict) and item.get("name")]
+    haystack = (question + " " + text)
+    fixed: list[dict] = []
+    notes: list[str] = []
+    for action in actions:
+        tool = action.get("tool") or ""
+        args = dict(action.get("args") or {})
+
+        if tool in ("open_project", "open_gallery") and not str(args.get("project") or "").strip():
+            match = next((name for name in projects if name and name in haystack), None)
+            if match:
+                args["project"] = match
+            elif tool == "open_project":
+                notes.append("没听清你想打开哪个项目")
+                continue
+            else:
+                fixed.append({"tool": tool, "args": args})
+                continue
+
+        # 有明确默认值的参数先补上，减少因为模型漏参数导致动作被丢弃
+        if tool == "open_admin_tab" and not str(args.get("tab") or "").strip():
+            args["tab"] = "dashboard"
+        if tool == "set_board_view" and not str(args.get("view") or "").strip():
+            args["view"] = "board"
+
+        required = REQUIRED_ARGS.get(tool, ())
+        if any(not str(args.get(key) or "").strip() for key in required):
+            logger.warning("agent_action_missing_args tool=%s args=%s", tool, args)
+            continue
+
+        if tool == "step_gallery":
+            try:
+                args["delta"] = 1 if int(args.get("delta", 1)) >= 0 else -1
+            except (TypeError, ValueError):
+                args["delta"] = 1
+
+        fixed.append({"tool": tool, "args": args})
+    return fixed, notes
+
+
 def _parse_actions(message: dict) -> list[dict]:
     actions: list[dict] = []
     for call in message.get("tool_calls") or []:
@@ -518,10 +579,19 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                 {"function": {"name": slot["name"], "arguments": slot["arguments"]}}
                 for _, slot in sorted(tool_calls.items())
             ]})
+            # 修掉模型偶尔给的空参数（缺项目名时从问题/回答/看板上下文补）
+            actions, repair_notes = _repair_actions(
+                actions, question, "".join(text_parts), request.ui
+            )
 
             # 先说话、再动作：动作事件放在文字之后，界面切换更自然
             for action in actions:
                 yield _sse("action", action)
+
+            if repair_notes:
+                note = "（" + "；".join(repair_notes) + "，可以说一下项目名）"
+                text_parts.append(note)
+                yield _sse("token", {"text": note})
 
             if not "".join(text_parts).strip():
                 fallback = _fallback_text(question, actions)
