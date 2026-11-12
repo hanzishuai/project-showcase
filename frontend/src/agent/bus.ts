@@ -18,7 +18,7 @@ const FAILURE_TEXT: Record<string, string> = {
   filter_board: '这个筛选条件没设上。',
 }
 
-type Handler = (args: Record<string, unknown>) => boolean | void
+type Handler = (args: Record<string, unknown>) => boolean | string | void
 
 const handlers = new Map<string, Handler>()
 const pending: AgentAction[] = []
@@ -36,7 +36,9 @@ function run(action: AgentAction): boolean {
   if (!handler) return false
   try {
     const result = handler(action.args ?? {})
-    if (result === false) {
+    if (typeof result === 'string' && result) {
+      Message.success({ content: result, duration: 2200 })
+    } else if (result === false) {
       Message.warning(FAILURE_TEXT[action.tool] ?? '这个操作没完成')
     }
     return true

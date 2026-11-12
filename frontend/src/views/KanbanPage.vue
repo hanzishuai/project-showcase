@@ -271,7 +271,9 @@ const setupAgentActions = () => {
       if ('advisor' in args) ownerFilter.value = String(args.advisor ?? '')
       if ('show_history' in args) historyOnly.value = Boolean(args.show_history)
       if (activeView.value !== 'board') switchView('board')
-      return true
+      const count = filteredVersions.value.length
+      const who = String(args.advisor ?? '').trim()
+      return who ? `已按「${who}」筛出 ${count} 个项目` : `已筛出 ${count} 个项目`
     }),
     registerAction('open_project', (args) => {
       const name = String(args.project ?? '').trim()
@@ -284,7 +286,7 @@ const setupAgentActions = () => {
       if (!target) return false
       switchView('board')
       openDrawer(target.id)
-      return true
+      return `已打开「${target.project.name}」`
     }),
     registerAction('close_drawer', () => {
       closeDrawer()

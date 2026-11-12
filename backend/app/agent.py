@@ -171,6 +171,23 @@ TOOLS = [
 
 ALLOWED_TOOLS = {item["function"]["name"] for item in TOOLS}
 
+# 复用连接：每轮新建客户端会让每次提问都重做 DNS/TLS 握手（约 200-400ms）
+_http_client: httpx.AsyncClient | None = None
+
+
+def _http_client_instance() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0, read=30.0))
+    return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+
 _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既能回答平台资料里的问题，也能直接操作这个系统的界面。
 
 {system_map}
@@ -248,44 +265,71 @@ def _ui_context(ui: dict | None) -> str:
     return "；".join(parts)
 
 
-async def _call_llm(messages: list[dict], retries: int = 1) -> dict:
-    """调用支持 function calling 的模型（非流式，一次拿到话术 + 动作）；瞬时失败重试一次。"""
-    last_error: Exception | None = None
-    for attempt in range(retries + 1):
-        try:
-            return await _call_llm_once(messages)
-        except Exception as exc:
-            last_error = exc
-            logger.warning("agent_llm_attempt_failed attempt=%s: %s", attempt, exc)
-            if attempt < retries:
-                await asyncio.sleep(0.4)
-    raise last_error or RuntimeError("LLM failed")
+async def warm_agent_llm() -> None:
+    """用一次极小的真实调用把模型链路焐热（DeepSeek 侧首次调用会更慢）。"""
+    started = time.perf_counter()
+    try:
+        async for _kind, _payload in _stream_llm([{"role": "user", "content": "hi"}]):
+            break
+        logger.warning("agent_warm_llm_ok elapsed=%dms", int((time.perf_counter() - started) * 1000))
+    except Exception as exc:  # 预热失败不影响服务
+        logger.warning("agent_warm_llm_skipped elapsed=%dms err=%s", int((time.perf_counter() - started) * 1000), exc)
 
 
-async def _call_llm_once(messages: list[dict]) -> dict:
-    """单次调用。"""
+async def _stream_llm(messages: list[dict]):
+    """流式调用模型：边产出 token，边累积 tool_calls。
+
+    产出 ("token", 文本) 或 ("tool_calls", {index: {name, arguments}})；后者在结束时一次性给出。
+    """
     payload = {
         "model": settings.llm_model,
         "messages": messages,
         "tools": TOOLS,
         "tool_choice": "auto",
-        "stream": False,
+        "stream": True,
         "temperature": 0.3,
         "max_tokens": 400,
     }
-    async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, connect=10.0)) as client:
-        response = await client.post(
-            settings.llm_base_url.rstrip("/") + "/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.llm_api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
+    collected: dict[int, dict] = {}
+    client = _http_client_instance()
+    async with client.stream(
+        "POST",
+        settings.llm_base_url.rstrip("/") + "/chat/completions",
+        headers={
+            "Authorization": f"Bearer {settings.llm_api_key}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+    ) as response:
         if response.status_code >= 400:
-            raise RuntimeError(f"LLM HTTP {response.status_code}: {response.text[:200]}")
-        data = response.json()
-    return data["choices"][0]["message"]
+            body = (await response.aread())[:200].decode("utf-8", "ignore")
+            raise RuntimeError(f"LLM HTTP {response.status_code}: {body}")
+        async for line in response.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            raw = line[5:].strip()
+            if not raw or raw == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            content = delta.get("content")
+            if content:
+                yield ("token", content)
+            for call in delta.get("tool_calls") or []:
+                index = int(call.get("index") or 0)
+                slot = collected.setdefault(index, {"name": "", "arguments": ""})
+                function = call.get("function") or {}
+                if function.get("name"):
+                    slot["name"] = function["name"]
+                if function.get("arguments"):
+                    slot["arguments"] += function["arguments"]
+    yield ("tool_calls", collected)
 
 
 def _parse_actions(message: dict) -> list[dict]:
@@ -328,10 +372,20 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
         yield _sse("meta", {"session_id": session_id, "request_id": request_id})
 
         question = request.question.strip()
+        started_llm = time.perf_counter()
+        text_parts: list[str] = []
         actions: list[dict] = []
-        text = ""
         try:
-            documents, _degraded = await retrieval.search(question, top_k=settings.rag_top_k)
+            # 冷启动时嵌入模型可能还没加载完：给检索一个上限，超时就先回答，
+            # 不让第一个问题卡十几秒（检索仍在后台继续，下轮就绪）
+            try:
+                documents, _degraded = await asyncio.wait_for(
+                    retrieval.search(question, top_k=settings.rag_top_k),
+                    timeout=1.2,
+                )
+            except asyncio.TimeoutError:
+                documents = []
+                logger.warning("agent_retrieval_timeout question=%s", question[:20])
             references = format_references(documents, max_chars=settings.rag_reference_max_chars)
             system_prompt = _SYSTEM_PROMPT.format(
                 name=settings.rag_assistant_name or "平台助手",
@@ -354,24 +408,39 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                     ),
                 },
             ]
-            message = await _call_llm(messages)
-            actions = _parse_actions(message)
-            text = (message.get("content") or "").strip() or _fallback_text(question, actions)
+
+            tool_calls: dict[int, dict] = {}
+            async for kind, payload in _stream_llm(messages):
+                if kind == "token":
+                    text_parts.append(payload)
+                    yield _sse("token", {"text": payload})
+                elif kind == "tool_calls":
+                    tool_calls = payload
+
+            actions = _parse_actions({"tool_calls": [
+                {"function": {"name": slot["name"], "arguments": slot["arguments"]}}
+                for _, slot in sorted(tool_calls.items())
+            ]})
+
+            # 先说话、再动作：动作事件放在文字之后，界面切换更自然
+            for action in actions:
+                yield _sse("action", action)
+
+            if not "".join(text_parts).strip():
+                fallback = _fallback_text(question, actions)
+                text_parts.append(fallback)
+                yield _sse("token", {"text": fallback})
         except Exception as exc:  # 模型不可用时不要卡住前端
             logger.warning("agent_llm_failed: %s", exc)
             yield _sse("error", {"message": "操作助手暂时不可用，请稍后再试。"})
             return
 
-        for action in actions:
-            yield _sse("action", action)
-
-        for offset in range(0, len(text), TOKEN_CHUNK):
-            yield _sse("token", {"text": text[offset:offset + TOKEN_CHUNK]})
-
+        text = "".join(text_parts)
         yield _sse("done", {
             "session_id": session_id,
             "request_id": request_id,
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
+            "llm_ms": int((time.perf_counter() - started_llm) * 1000),
             "answer_chars": len(text),
             "actions": [action["tool"] for action in actions],
             "timings_ms": {},

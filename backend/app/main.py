@@ -22,15 +22,17 @@ from .routers.api import router as api_router
 from .seed import seed_if_empty
 
 
-async def _warmup_rag() -> None:
-    """预热数字人后端：嵌入模型 + LLM/TTS/HTTP 连接，避免重启后第一次提问冷启动失败。"""
+async def _warm_encoder() -> None:
     try:
         from pp7rag.engine.retriever import get_shared_encoder
 
         await asyncio.to_thread(get_shared_encoder)
         logger.info("rag_warmup_encoder_ready")
-    except Exception as exc:  # 预热失败不影响服务启动
+    except Exception as exc:
         logger.warning("rag_warmup_encoder_failed: %s", exc)
+
+
+async def _warm_providers() -> None:
     try:
         from pp7rag.ragapi.providers import http as rag_http
         from pp7rag.ragapi.providers import llm, tts
@@ -39,6 +41,21 @@ async def _warmup_rag() -> None:
         logger.info("rag_warmup_providers_ready")
     except Exception as exc:
         logger.warning("rag_warmup_providers_failed: %s", exc)
+
+
+async def _warm_agent() -> None:
+    try:
+        from .agent import warm_agent_llm
+
+        await warm_agent_llm()
+        logger.info("rag_warmup_agent_ready")
+    except Exception as exc:
+        logger.warning("rag_warmup_agent_failed: %s", exc)
+
+
+async def _warmup_rag() -> None:
+    """预热数字人后端：嵌入模型、LLM/TTS 连接、Agent 模型链路（三者并行）。"""
+    await asyncio.gather(_warm_encoder(), _warm_providers(), _warm_agent(), return_exceptions=True)
 
 
 @asynccontextmanager
@@ -51,6 +68,12 @@ async def lifespan(_app: FastAPI):
         yield
     finally:
         warmup_task.cancel()
+        try:
+            from .agent import close_http_client
+
+            await close_http_client()
+        except Exception:
+            pass
 
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION, lifespan=lifespan)
