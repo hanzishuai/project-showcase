@@ -26,6 +26,14 @@
    改成 `if (!message.content) continue;`（该行在 `rag-avatar.js` 中唯一，已确认只替换 1 处）。
    > 建议上游同步修：`packages/rag-avatar/src/components/ChatPanel.vue` 第 253 行。
 
+2. **TTS 切句改为整句级**：`extractSpeakableSegments` 原实现第一段强制 10 字切、后续 24 字切、
+   逗号/顿号累计 14 字就切，短回答会被切成「这个问题我从资料里没」+「找到能直接操作的入口，…」，
+   甚至出现「…一千二百六十名用」+「户；」这种 2 字碎片；每段单独请求 TTS，拼接后语气很怪。
+   补丁改为：按 `。！？；` 等句末标点整句切分；只有 ≥110 字的超长句才在逗号/顿号/冒号处断；
+   最短 6 字，避免碎片；完全没有标点时最多 120 字兜底（优先切在句中标点，避免切在词中间）。
+   配套自测：`scripts/tts-segment-selftest.mjs`。
+   > 建议上游把切句阈值做成配置项（minLength / softMin / maxLength）。
+
 ## 升级方式
 
 从 PP7 仓库重新构建（`npm run build`）后覆盖本目录两个文件即可；覆盖后需重新应用上面的补丁。

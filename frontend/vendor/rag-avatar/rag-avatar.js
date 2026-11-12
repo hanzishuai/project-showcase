@@ -1833,7 +1833,7 @@ function splitSentences(text, options = {}) {
 }
 const SPEAK_HARD = /* @__PURE__ */ new Set(["。", "！", "？", "；", "!", "?", ";", "\n", "…"]);
 const SPEAK_SOFT = /* @__PURE__ */ new Set(["，", ",", "、", "：", ":"]);
-function chunkSpeakable(text, maxLength) {
+function chunkSpeakable(text, maxLength = 120) {
   const source = text.trim();
   if (!source) return [];
   if (source.length <= maxLength) return [source];
@@ -1853,28 +1853,23 @@ function chunkSpeakable(text, maxLength) {
   return chunks;
 }
 function extractSpeakableSegments(buffer, options = {}) {
-  const maxLength = options.maxLength ?? 24;
-  const minLength = options.minLength ?? 2;
-  const firstMinLength = options.firstMinLength ?? 4;
-  const firstSoftMin = options.firstSoftMin ?? 4;
-  const firstMaxLength = options.firstMaxLength ?? 10;
-  const softMin = options.softMin ?? 14;
-  const eagerFirst = options.eagerFirst ?? true;
+  const maxLength = options.maxLength ?? 120;
+  const minLength = options.minLength ?? 6;
+  const softMin = options.softMin ?? 110;
+  const forceSoftMin = options.forceSoftMin ?? 40;
   const segments = [];
-  let emitted = 0;
   let start = 0;
   let i = 0;
-  const emit = (raw) => {
-    const pieces = chunkSpeakable(raw, maxLength);
-    for (const piece of pieces) {
-      segments.push(piece);
-      emitted += 1;
-    }
+  const push = (raw) => {
+    const piece = (raw || "").trim();
+    if (!piece) return;
+    if (piece.length > maxLength) segments.push(...chunkSpeakable(piece, maxLength));
+    else segments.push(piece);
   };
   while (i < buffer.length) {
     const ch = buffer[i];
     if (ch === void 0) break;
-    if (SPEAK_HARD.has(ch) || SPEAK_SOFT.has(ch)) {
+    if (SPEAK_HARD.has(ch)) {
       let end = i + 1;
       while (end < buffer.length) {
         const next = buffer[end];
@@ -1882,38 +1877,55 @@ function extractSpeakableSegments(buffer, options = {}) {
         end += 1;
       }
       const candidate = buffer.slice(start, end).trim();
-      const eager = eagerFirst && emitted === 0;
-      const requiredLength = eager ? Math.max(minLength, firstMinLength) : minLength;
-      if (candidate.length >= requiredLength) {
-        if (SPEAK_HARD.has(ch)) {
-          emit(candidate);
-          start = end;
-          i = end;
-          continue;
-        }
-        const threshold = eager ? firstSoftMin : softMin;
-        if (candidate.length >= threshold) {
-          emit(candidate);
-          start = end;
-          i = end;
-          continue;
-        }
+      if (candidate.length >= minLength) {
+        push(candidate);
+        start = end;
+        i = end;
+        continue;
       }
       i = end;
       continue;
     }
-    const forceLimit = eagerFirst && emitted === 0 ? Math.min(maxLength, firstMaxLength) : maxLength;
-    if (i - start + 1 >= forceLimit) {
-      const candidate = buffer.slice(start, i + 1).trim();
-      if (candidate.length >= minLength) emit(candidate);
-      start = i + 1;
+    if (SPEAK_SOFT.has(ch)) {
+      let end = i + 1;
+      while (end < buffer.length) {
+        const next = buffer[end];
+        if (next === void 0 || !CLOSERS.has(next)) break;
+        end += 1;
+      }
+      const candidate = buffer.slice(start, end).trim();
+      if (candidate.length >= softMin) {
+        push(candidate);
+        start = end;
+        i = end;
+        continue;
+      }
+      i = end;
+      continue;
+    }
+    if (i - start + 1 >= maxLength) {
+      const raw = buffer.slice(start, i + 1);
+      let cut = -1;
+      for (let k = raw.length - 1; k >= forceSoftMin - 1; k -= 1) {
+        if (SPEAK_SOFT.has(raw[k])) {
+          cut = k + 1;
+          break;
+        }
+      }
+      if (cut > 0) {
+        push(raw.slice(0, cut));
+        start += cut;
+      } else {
+        push(raw);
+        start = i + 1;
+      }
     }
     i += 1;
   }
   return { segments, rest: buffer.slice(start) };
 }
 function splitSpeakableText(text, options = {}) {
-  const maxLength = options.maxLength ?? 24;
+  const maxLength = options.maxLength ?? 120;
   const { segments, rest } = extractSpeakableSegments(text, options);
   const tail = rest.trim();
   if (tail) segments.push(...chunkSpeakable(tail, maxLength));

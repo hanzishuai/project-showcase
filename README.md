@@ -108,7 +108,7 @@ LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作
 
 - 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
 - 语音：点麦克风单句录音提问；播报中点麦克风可打断（barge-in）。
-- 自测：`node scripts/agent-selftest.mjs`（55 条指令用例）、`agent-ui-selftest.mjs`（27 项浏览器断言）、`agent-voice-selftest.mjs`（7 项语音闭环）、`agent-bench.mjs`（首字/总耗时基准与阈值）。
+- 自测：`node scripts/agent-selftest.mjs`（55 条指令用例）、`agent-ui-selftest.mjs`（27 项浏览器断言）、`agent-voice-selftest.mjs`（7 项语音闭环）、`tts-segment-selftest.mjs`（8 项 TTS 切句）、`agent-bench.mjs`（首字/总耗时基准与阈值）。
 - 说明：`docs/2026-11-12-agent-ui-control.md`。
 
 ## REST API
