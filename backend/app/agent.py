@@ -30,6 +30,21 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 MAX_ACTIONS = 4
 
+# 纯动作指令（「打开管理后台」「看下一张」）不需要检索资料：省掉一次向量检索的耗时
+_COMMAND_PREFIX = ("打开", "切到", "切换到", "跳到", "回到", "返回到", "关掉", "关闭",
+                   "显示", "只看", "筛选", "看下一张", "上一张", "下一张", "翻页")
+_INTERROGATIVE = ("什么", "多少", "哪", "谁", "怎么", "为什么", "吗", "呢", "？", "?")
+
+
+def _needs_retrieval(question: str) -> bool:
+    """只有可能需要资料时才检索；纯动作短句跳过，降低首字延迟。"""
+    text = (question or "").strip()
+    if not text or len(text) > 24:
+        return True
+    if any(mark in text for mark in _INTERROGATIVE):
+        return True
+    return not text.startswith(_COMMAND_PREFIX)
+
 # ---------------------------------------------------------------------------
 # 系统地图：模型据此知道系统里有什么、能做什么
 # ---------------------------------------------------------------------------
@@ -52,7 +67,7 @@ SYSTEM_MAP = """
 - filter_board(project?, advisor?, show_history?)：设置看板筛选；传空字符串表示清除该筛选
 - open_project(project, version?)：按项目名打开右侧详情抽屉（version 可选）
 - close_drawer()：关闭详情抽屉
-- open_gallery(index?)：打开当前项目的图片灯箱
+- open_gallery(index?, project?)：打开图片灯箱；未打开详情时可传项目名，会先打开该项目
 - step_gallery(delta)：图片灯箱翻页，delta = -1 上一张 / 1 下一张（仅在灯箱已打开时使用；未打开时用 open_gallery）
 - close_gallery()：关闭图片灯箱
 - open_admin_tab(tab)：后台页签，tab ∈ dashboard / conversations / knowledge
@@ -125,10 +140,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "open_gallery",
-            "description": "打开当前详情项目的图片灯箱",
+            "description": "打开图片灯箱。当前没有打开详情时，可以传 project 指定项目，会先打开它再显示图片",
             "parameters": {
                 "type": "object",
-                "properties": {"index": {"type": "integer", "minimum": 0, "maximum": 9}},
+                "properties": {
+                    "index": {"type": "integer", "minimum": 0, "maximum": 9},
+                    "project": {"type": "string", "description": "可选：项目名"},
+                },
             },
         },
     },
@@ -322,13 +340,44 @@ async def warm_agent_llm() -> None:
         logger.warning("agent_warm_llm_skipped elapsed=%dms err=%s", int((time.perf_counter() - started) * 1000), exc)
 
 
+def _llm_targets() -> list[tuple[str, str, str]]:
+    """返回 LLM 目标：主通道（DeepSeek）+ 备用通道（百炼兼容模式）。"""
+    targets: list[tuple[str, str, str]] = []
+    if settings.llm_api_key:
+        targets.append((settings.llm_base_url, settings.llm_model, settings.llm_api_key))
+    fallback_key = settings.llm_fallback_api_key or settings.dashscope_api_key
+    if fallback_key and settings.llm_fallback_base_url:
+        targets.append(
+            (settings.llm_fallback_base_url, settings.llm_fallback_model or "qwen-flash", fallback_key)
+        )
+    return targets
+
+
 async def _stream_llm(messages: list[dict]):
+    """按主备顺序尝试；某个目标在吐出任何内容前失败，就换下一个。"""
+    last_error: Exception | None = None
+    for base_url, model, api_key in _llm_targets():
+        yielded = False
+        try:
+            async for kind, payload in _stream_llm_once(messages, base_url, model, api_key):
+                yielded = True
+                yield kind, payload
+            return
+        except Exception as exc:
+            last_error = exc
+            if yielded:
+                raise
+            logger.warning("agent_llm_target_failed model=%s: %s", model, str(exc)[:180])
+    raise last_error or RuntimeError("没有可用的 LLM 通道")
+
+
+async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_key: str):
     """流式调用模型：边产出 token，边累积 tool_calls。
 
     产出 ("token", 文本) 或 ("tool_calls", {index: {name, arguments}})；后者在结束时一次性给出。
     """
     payload = {
-        "model": settings.llm_model,
+        "model": model,
         "messages": messages,
         "tools": TOOLS,
         "tool_choice": "auto",
@@ -340,9 +389,9 @@ async def _stream_llm(messages: list[dict]):
     client = _http_client_instance()
     async with client.stream(
         "POST",
-        settings.llm_base_url.rstrip("/") + "/chat/completions",
+        base_url.rstrip("/") + "/chat/completions",
         headers={
-            "Authorization": f"Bearer {settings.llm_api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
         json=payload,
@@ -424,14 +473,16 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
         try:
             # 冷启动时嵌入模型可能还没加载完：给检索一个上限，超时就先回答，
             # 不让第一个问题卡十几秒（检索仍在后台继续，下轮就绪）
-            try:
-                documents, _degraded = await asyncio.wait_for(
-                    retrieval.search(question, top_k=settings.rag_top_k),
-                    timeout=1.2,
-                )
-            except asyncio.TimeoutError:
-                documents = []
-                logger.warning("agent_retrieval_timeout question=%s", question[:20])
+            documents = []
+            if _needs_retrieval(question):
+                try:
+                    documents, _degraded = await asyncio.wait_for(
+                        retrieval.search(question, top_k=settings.rag_top_k),
+                        timeout=1.2,
+                    )
+                except asyncio.TimeoutError:
+                    documents = []
+                    logger.warning("agent_retrieval_timeout question=%s", question[:20])
             references = format_references(documents, max_chars=settings.rag_reference_max_chars)
             system_prompt = _SYSTEM_PROMPT.format(
                 name=settings.rag_assistant_name or "平台助手",

@@ -83,7 +83,14 @@ const CASES = [
       { role: 'user', content: '科研成果管理平台做完了吗？' },
       { role: 'assistant', content: '科研成果管理平台当前是 v2.0 版本，处在测试阶段。' },
     ],
-    expect: { tools: [{ tool: 'open_project', args: { project: '科研成果管理平台' } }] },
+    // 可以直接打开详情，也可以一步打开「详情 + 图片」，两种都对
+    expect: {
+      tools: [],
+      anyOf: [
+        { tool: 'open_project', args: { project: '科研成果管理平台' } },
+        { tool: 'open_gallery', args: { project: '科研成果管理平台' } }
+      ]
+    },
   },
   { name: '现在还剩几个项目', ui: { ...BOARD_UI, advisorFilter: '张三', visibleCards: 1 }, expect: { tools: [] } },
   { name: '把筛选清空', ui: { ...BOARD_UI, projectFilter: '实验室预约系统', advisorFilter: '张三' }, expect: { tools: [{ tool: 'filter_board' }] } },

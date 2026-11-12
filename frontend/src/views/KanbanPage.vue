@@ -293,9 +293,23 @@ const setupAgentActions = () => {
       return true
     }),
     registerAction('open_gallery', (args) => {
+      const projectName = String(args.project ?? '').trim()
+      if (projectName) {
+        const exact = versions.find((item) => item.project.name === projectName && item.current)
+        const target =
+          exact ??
+          versions.find((item) => item.project.name === projectName) ??
+          versions.find((item) => item.project.name.includes(projectName) || projectName.includes(item.project.name))
+        if (!target) return false
+        switchView('board')
+        openDrawer(target.id)
+      }
       if (!selected.value) return false
-      openGallery(Number(args.index ?? 0))
-      return true
+      const total = selected.value.project.images.length
+      if (!total) return false
+      const index = Math.min(Math.max(Number(args.index ?? 0), 0), total - 1)
+      openGallery(index)
+      return `已打开「${selected.value.project.name}」的项目图片`
     }),
     registerAction('step_gallery', (args) => {
       if (!selected.value || galleryIndex.value < 0) return false

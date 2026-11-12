@@ -174,6 +174,9 @@ try {
       transcript = state.userText.trim()
       record('语音识别出文字', transcript.length > 0, transcript.slice(0, 40))
       record('识别后自动提问并得到回复', state.lastText.trim().length > 0, state.lastText.trim().slice(0, 60))
+      await sleep(1200)
+      const navState = await evaluate(`(() => ({ hash: location.hash, admin: !!document.querySelector('.admin-root') }))()`)
+      record('语音指令触发了界面动作', navState.hash === '#/admin' && navState.admin, JSON.stringify(navState))
       break
     }
     if (i === 19) record('语音识别出文字', false, '等待超时')
