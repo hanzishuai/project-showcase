@@ -66,7 +66,7 @@ project-showcase/
   以及 `WS /api/v1/rag/stream`（token + PCM 单连接）和 `WS /api/v1/rag/asr/stream`（边说边识别）。
 - 能力：Chroma 向量检索 + DeepSeek 生成的真实问答；DashScope Qwen3 的 TTS/ASR；打断、推荐问题。
 - 来源展示：只显示一行「来源：文档名」—— 后端按文档把多个检索分块合并成一条来源（`build_sources`），前端用样式把组件自带的资料大卡片压成一行（不显示摘要/匹配度/展开原文）。
-- 管理后台：`#/admin`（工作概览 / 对话记录 / 知识库管理 / 系统设置），无鉴权（同 PP7 原设计），系统设置可在线改模型/密钥/音色/检索参数并立即生效；
+- 管理后台：`#/admin`（工作概览 / 对话记录 / 知识库管理 / 系统设置），无鉴权（同 PP7 原设计），系统设置可在线改模型/密钥/音色/检索参数/唤醒词并立即生效（唤醒词只存本浏览器）；
   会话数据来自 `/api/admin/*` —— 由 `backend/app/admin_compat.py` 从 SQLite 问答日志聚合，不引入 MySQL/Redis。
 - 配置：`backend/.env`（已 gitignore）放 DashScope / DeepSeek 密钥、音色、人设（`RAG_ASSISTANT_NAME` / `RAG_PLATFORM_NAME`）；未配置时语音入口自动隐藏。
 - 提示词：`backend/pp7rag/engine/prompts.py` 已按本项目改写（平台名参数化、1801 字、去标签词、来源由界面展示），启动时预热嵌入模型与 LLM/TTS 连接，空回答改为显式错误。见 `docs/2026-11-12-prompt-optimization.md`。
@@ -106,8 +106,9 @@ project-showcase/
 分支 `feat/agent-ui-control`（不影响 main）。数字人除了回答问题，还能听懂「打开管理后台」「只看张三的项目」「看下一张图」这类话并直接操作界面：
 LLM function calling 产出动作指令 → SSE `action` 事件 → 前端动作总线执行（9 个只读动作，不执行任何写操作）。
 
-- 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
-- 自测：`node scripts/agent-selftest.mjs`（35 条指令用例）、`node scripts/agent-ui-selftest.mjs`（13 项浏览器 DOM 断言）。
+- 实现：`backend/app/agent.py`（系统地图 + 工具 + `/api/v1/agent/ask`）、`frontend/src/agent/{bus,uiState,fetch,wake}.ts`、`frontend/src/components/AgentDock.vue`（跨页面浮层）。
+- 语音：播报中点麦克风可打断（barge-in）；`🎧` 唤醒开关常驻听「你好你好」，唤醒词可在系统设置里改（只存本浏览器）。
+- 自测：`node scripts/agent-selftest.mjs`（55 条指令用例）、`agent-ui-selftest.mjs`（31 项浏览器断言）、`agent-voice-selftest.mjs`（7 项语音闭环）、`agent-wake-selftest.mjs`（5 项语音唤醒）、`agent-bench.mjs`（首字/总耗时基准与阈值）。
 - 说明：`docs/2026-11-12-agent-ui-control.md`。
 
 ## REST API

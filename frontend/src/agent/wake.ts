@@ -20,7 +20,9 @@ export interface WakeDetectorOptions {
   onStatus?: (status: WakeStatus, info?: { transcript?: string; level?: number }) => void
 }
 
-const DEFAULT_PHRASE = '你好你好'
+export const DEFAULT_PHRASE = '你好你好'
+/** 唤醒词变更事件：设置页保存后，常驻浮层立即更新提示文案。 */
+export const WAKE_PHRASE_EVENT = 'agent-wake-phrase'
 const SILENCE_MS = 700
 const MAX_UTTERANCE_MS = 6000
 const RESTART_DELAY_MS = 250
@@ -52,9 +54,16 @@ export function getWakePhrase(): string {
   }
 }
 
+/** 保存唤醒词（本浏览器），并通知常驻浮层立即更新提示文案。 */
 export function setWakePhrase(phrase: string): void {
+  const next = (phrase || '').trim() || DEFAULT_PHRASE
   try {
-    localStorage.setItem(PHRASE_STORAGE_KEY, phrase || DEFAULT_PHRASE)
+    localStorage.setItem(PHRASE_STORAGE_KEY, next)
+  } catch {
+    // 忽略
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(WAKE_PHRASE_EVENT, { detail: next }))
   } catch {
     // 忽略
   }
@@ -134,7 +143,7 @@ export function createWakeWordDetector(options: WakeDetectorOptions): WakeDetect
         setStatus('transcribing')
         try {
           const text = await transcribe(blob)
-          const phrase = options.phrase || getWakePhrase()
+          const phrase = getWakePhrase() || options.phrase || DEFAULT_PHRASE
           if (matchesWakePhrase(text, phrase)) {
             setStatus('detected', { transcript: text })
             options.onWake(text)

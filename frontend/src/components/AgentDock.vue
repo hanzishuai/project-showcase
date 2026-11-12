@@ -79,7 +79,7 @@ import { Message } from '@arco-design/web-vue'
 import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
 import { agentFetch } from '../agent/fetch'
 import { setActionFailureHandler } from '../agent/bus'
-import { createWakeWordDetector, getWakePhrase, type WakeStatus } from '../agent/wake'
+import { createWakeWordDetector, getWakePhrase, WAKE_PHRASE_EVENT, type WakeStatus } from '../agent/wake'
 import { uiState } from '../agent/uiState'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
@@ -168,6 +168,12 @@ const observeApp = () => {
 }
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
+
+// 设置页改了唤醒词后，常驻浮层的提示文案立即跟着变（唤醒检测本身每次都会读最新值）
+const onWakePhraseChanged = (event: Event): void => {
+  const next = (event as CustomEvent<string>).detail
+  if (typeof next === 'string' && next) wakePhrase.value = next
+}
 
 const wakeLabel = computed(() => {
   switch (wakeStatus.value) {
@@ -262,6 +268,7 @@ onMounted(() => {
   measure()
   observeApp()
   window.addEventListener('resize', measure)
+  window.addEventListener(WAKE_PHRASE_EVENT, onWakePhraseChanged)
   setTimeout(measure, 120)
   setTimeout(measure, 500)
 })
@@ -271,6 +278,7 @@ onBeforeUnmount(() => {
   wakeDetector = null
   setActionFailureHandler(null)
   window.removeEventListener('resize', measure)
+  window.removeEventListener(WAKE_PHRASE_EVENT, onWakePhraseChanged)
   appObserver?.disconnect()
   cancelAnimationFrame(rafId)
 })

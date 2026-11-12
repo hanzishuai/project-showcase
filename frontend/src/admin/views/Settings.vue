@@ -39,6 +39,17 @@
         </div>
       </section>
 
+      <section class="surface" style="margin-bottom:16px">
+        <h3 class="group-title">语音唤醒（仅本浏览器）</h3>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">唤醒词</span>
+            <a-input v-model="wakePhrase" :placeholder="DEFAULT_PHRASE" @blur="saveWakePhrase" @press-enter="saveWakePhrase" />
+            <span class="field-hint">回车或失焦即保存；默认「{{ DEFAULT_PHRASE }}」。</span>
+          </label>
+        </div>
+      </section>
+
       <div class="actions">
         <a-space>
           <a-button type="primary" :loading="saving" @click="save">保存设置</a-button>
@@ -55,6 +66,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { DEFAULT_PHRASE, getWakePhrase, setWakePhrase } from '../../agent/wake'
 
 interface SettingItem {
   key: string
@@ -80,6 +92,15 @@ const loading = ref(false)
 const saving = ref(false)
 const testing = ref('')
 const note = ref('')
+const wakePhrase = ref(getWakePhrase())
+
+function saveWakePhrase(): void {
+  const next = wakePhrase.value.trim() || DEFAULT_PHRASE
+  if (next === getWakePhrase()) return
+  setWakePhrase(next)
+  wakePhrase.value = next
+  Message.success('唤醒词已保存为「' + next + '」')
+}
 
 async function load(): Promise<void> {
   loading.value = true
