@@ -48,13 +48,42 @@ const CASES = [
   { name: '回到生命周期看板', ui: { page: 'admin', adminTab: 'knowledge' }, expect: { tools: [{ tool: 'navigate_page', args: { page: 'board' } }] } },
   { name: '打开数据修改页', ui: BOARD_UI, expect: { tools: [{ tool: 'navigate_page', args: { page: 'edit' } }] } },
   { name: '看看学术讲座预约平台', ui: BOARD_UI, expect: { tools: [{ tool: 'open_project', args: { project: '学术讲座预约平台' } }] } },
+
+  // ---- 多轮：靠历史理解指代 ----
+  {
+    name: '把刚才那个项目的详情打开',
+    ui: BOARD_UI,
+    history: [
+      { role: 'user', content: '实验室预约系统现在什么进度？' },
+      { role: 'assistant', content: '实验室预约系统当前是 v1.2 版本，处在开发阶段，已停留 19 天。' },
+    ],
+    expect: { tools: [{ tool: 'open_project', args: { project: '实验室预约系统' } }] },
+  },
+  {
+    name: '那它的图片呢',
+    ui: BOARD_UI,
+    history: [
+      { role: 'user', content: '科研成果管理平台做完了吗？' },
+      { role: 'assistant', content: '科研成果管理平台当前是 v2.0 版本，处在测试阶段。' },
+    ],
+    expect: { tools: [{ tool: 'open_project', args: { project: '科研成果管理平台' } }] },
+  },
+  {
+    name: '它上线了吗',
+    ui: BOARD_UI,
+    history: [
+      { role: 'user', content: '平台是干什么的？' },
+      { role: 'assistant', content: '产教融合服务平台是学校和企业之间的技术对接平台，目前还是演示版，没有正式上线。' },
+    ],
+    expect: { tools: [] },
+  },
 ]
 
-async function ask(question, ui) {
+async function ask(question, ui, history) {
   const response = await fetch(BASE + '/api/v1/agent/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, ui: { ...ui, projects: PROJECTS } }),
+    body: JSON.stringify({ question, ui: { ...ui, projects: PROJECTS }, history: history || [] }),
   })
   if (!response.ok || !response.body) throw new Error('HTTP ' + response.status)
   const reader = response.body.getReader()
@@ -116,7 +145,7 @@ let passed = 0
 const failures = []
 for (const item of CASES) {
   try {
-    const result = await ask(item.name, item.ui)
+    const result = await ask(item.name, item.ui, item.history)
     const problems = check(item.expect, result.actions)
     if (problems.length === 0) {
       passed += 1

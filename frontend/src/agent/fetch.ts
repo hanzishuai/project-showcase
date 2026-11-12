@@ -7,6 +7,22 @@
 import { dispatchAction, type AgentAction } from './bus'
 import { snapshotUiState } from './uiState'
 
+interface Turn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** 最近几轮问答（前端内存维护），随请求带给模型用于理解「它 / 那个项目」 */
+const HISTORY_LIMIT = 6
+const history: Turn[] = []
+
+function pushTurn(role: Turn['role'], content: string): void {
+  const text = content.trim()
+  if (!text) return
+  history.push({ role, content: text })
+  while (history.length > HISTORY_LIMIT) history.shift()
+}
+
 const RAG_ASK = '/api/v1/rag/ask'
 const AGENT_ASK = '/api/v1/agent/ask'
 
@@ -16,11 +32,12 @@ function resolveUrl(input: RequestInfo | URL): string {
   return (input as Request).url
 }
 
-async function consumeActions(stream: ReadableStream<Uint8Array>): Promise<void> {
+async function consumeStream(stream: ReadableStream<Uint8Array>, question: string): Promise<void> {
   const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
   let eventName = ''
+  let answer = ''
   try {
     for (;;) {
       const { done, value } = await reader.read()
@@ -34,12 +51,20 @@ async function consumeActions(stream: ReadableStream<Uint8Array>): Promise<void>
           eventName = ''
         } else if (line.startsWith('event:')) {
           eventName = line.slice(6).trim()
-        } else if (line.startsWith('data:') && eventName === 'action') {
-          try {
-            const payload = JSON.parse(line.slice(5).trim()) as AgentAction
-            dispatchAction(payload)
-          } catch {
-            // 忽略坏帧
+        } else if (line.startsWith('data:')) {
+          const payload = line.slice(5).trim()
+          if (eventName === 'action') {
+            try {
+              dispatchAction(JSON.parse(payload) as AgentAction)
+            } catch {
+              // 忽略坏帧
+            }
+          } else if (eventName === 'token') {
+            try {
+              answer += String(JSON.parse(payload)?.text ?? '')
+            } catch {
+              // 忽略坏帧
+            }
           }
         }
         index = buffer.indexOf('\n')
@@ -49,6 +74,10 @@ async function consumeActions(stream: ReadableStream<Uint8Array>): Promise<void>
     // 流被中断（用户打断）时静默结束
   } finally {
     reader.releaseLock()
+    if (answer.trim()) {
+      pushTurn('user', question)
+      pushTurn('assistant', answer)
+    }
   }
 }
 
@@ -67,16 +96,17 @@ export const agentFetch: typeof fetch = async (input: RequestInfo | URL, init?: 
 
   const headers = new Headers(init?.headers ?? {})
   headers.set('Content-Type', 'application/json')
+  const question = String(body.question ?? '')
   const response = await fetch(AGENT_ASK, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ ...body, ui: snapshotUiState() }),
+    body: JSON.stringify({ ...body, ui: snapshotUiState(), history: [...history] }),
     signal: init?.signal
   })
 
   if (!response.ok || !response.body) return response
   const [forSdk, forActions] = response.body.tee()
-  void consumeActions(forActions)
+  void consumeStream(forActions, question)
   return new Response(forSdk, {
     status: response.status,
     statusText: response.statusText,
