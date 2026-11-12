@@ -17,3 +17,8 @@ design-variants/
 
 # 运行时日志
 backend/data/*.log
+
+# 数字人 RAG 后端（移植自 pp7）本地配置与派生数据
+backend/.env
+backend/data/chroma_storage/
+backend/data/qa_log.sqlite3

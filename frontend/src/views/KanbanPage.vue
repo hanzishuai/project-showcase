@@ -8,6 +8,7 @@ import {
   type KanbanProject,
   type KanbanVersion
 } from '../kanban/data'
+import RagAvatar from '../../vendor/rag-avatar/rag-avatar.js'
 
 interface VersionView extends KanbanVersion {
   id: string
@@ -20,6 +21,9 @@ interface VersionView extends KanbanVersion {
 const kanbanData = loadKanbanData()
 const KANBAN_STAGES = kanbanData.stages
 const KANBAN_PROJECTS = kanbanData.projects
+
+// 数字人：走同源 RAG 后端（/api/v1/rag，由 backend/pp7rag 提供），问答、语音识别与合成都在服务端。
+const onRagError = (message: string) => console.warn('[rag-avatar]', message)
 
 const appEl = ref<HTMLDivElement | null>(null)
 const stageChartEl = ref<HTMLDivElement | null>(null)
@@ -278,6 +282,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="nav-right">
         <a class="nav-action" href="#/edit">数据修改</a>
+        <a class="nav-action" href="#/admin">管理后台</a>
         <nav class="nav-tabs" aria-label="页面视图">
           <button class="tab" :class="{ active: activeView === 'overview' }" type="button" @click="switchView('overview')">数据总览</button>
           <button class="tab" :class="{ active: activeView === 'board' }" type="button" @click="switchView('board')">生命周期看板</button>
@@ -365,7 +370,24 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="board-main">
-        <div class="pet-stage" aria-hidden="true"></div>
+        <div class="pet-stage">
+          <RagAvatar
+            api-base-url=""
+            position="bottom-left"
+            :width="600"
+            :height="864"
+            theme="dark"
+            title="项目实践聚合平台 AI 助手"
+            placeholder="问我问题，或点麦克风说话"
+            :enable-voice="true"
+            :auto-speak="true"
+            :show-sources="true"
+            :suggestions="true"
+            :vad="true"
+            :persist-session="true"
+            @error="onRagError"
+          />
+        </div>
         <div class="lanes">
         <section v-for="(lane, laneIndex) in lanes" :key="lane.name" class="lane">
           <div class="lane-head">

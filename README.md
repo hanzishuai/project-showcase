@@ -16,13 +16,17 @@ project-showcase/
 │  │  ├─ seed.py            从 data/projects.json 灌种子
 │  │  └─ routers/api.py     REST 路由
 │  ├─ tests/                pytest 契约测试（9 条）
+│  ├─ pp7rag/               数字人 RAG 后端（移植自 pp7：检索 / 问答 / TTS / ASR）
+│  └─ app/admin_compat.py   管理后台接口（映射到 SQLite 问答日志）
 │  ├─ data/app.db           SQLite 数据库（首次启动自动生成）
 │  └─ requirements.txt
 ├─ frontend/                Vue 3 + Vite
 │  ├─ src/App.vue           直接渲染 KanbanPage
 │  ├─ src/views/KanbanPage.vue  数据总览 + 生命周期看板双视图
 │  ├─ src/kanban/data.ts    看板数据（9 个演示项目 / 19 个版本）
+│  ├─ src/kanban/localRag.ts 数字人本地问答（浏览器内规则回答，不联网）
 │  ├─ src/kanban.css        深色看板样式（1920×1080 等比缩放）
+│  ├─ vendor/rag-avatar/    PP7 RAG 数字人组件构建产物（vendored）
 │  ├─ src/views/            旧 DashboardView / ProjectDetailView 保留未挂入口
 │  ├─ src/components/       旧顶栏、在做项目卡、已做项目卡（保留未挂入口）
 │  └─ src/api.ts            API 客户端（旧页面使用，看板当前为本地演示数据）
@@ -51,7 +55,27 @@ project-showcase/
 
 > 当前看板使用 `frontend/src/kanban/data.ts` 的本地演示数据（9 个项目、19 个版本）；真实项目与成员名单替换该文件即可。数据修改页保存的内容优先存于浏览器 localStorage，换浏览器或清理站点数据会回到默认演示值。
 
-## 2026-11-10 深色生命周期看板（最新）
+## 2026-11-11 数字人 + 后端移植 + 管理后台（最新）
+
+看板左侧预留的 600px 空白区接入 PP7 的可嵌入数字人（`@pp7/rag-avatar` 0.4.0），
+并且把 PP7 的 RAG 后端**并进了本项目后端**（同一进程、同一 8000 端口），管理后台也集成进前端。
+
+- 数字人：`frontend/vendor/rag-avatar/`（构建产物，来源与补丁见 `PROVENANCE.md`），挂在 `KanbanPage.vue` 的 `.pet-stage`。
+- 后端：`backend/pp7rag/`（移植自 pp7，只改了 import；26 个文件），提供 `/api/v1/rag/*`：
+  `ask`（SSE 流式）、`suggestions`、`feedback`、`qa/stats|recent`、`asr`、`tts`、`tts/stream`、`health`、`knowledge/*`，
+  以及 `WS /api/v1/rag/stream`（token + PCM 单连接）和 `WS /api/v1/rag/asr/stream`（边说边识别）。
+- 能力：Chroma 向量检索 + DeepSeek 生成的真实问答；DashScope Qwen3 的 TTS/ASR；打断、推荐问题。
+- 来源展示：只显示一行「来源：文档名」—— 后端按文档把多个检索分块合并成一条来源（`build_sources`），前端用样式把组件自带的资料大卡片压成一行（不显示摘要/匹配度/展开原文）。
+- 管理后台：`#/admin`（工作概览 / 对话记录 / 知识库管理），JWT 无鉴权（同 PP7 原设计），
+  会话数据来自 `/api/admin/*` —— 由 `backend/app/admin_compat.py` 从 SQLite 问答日志聚合，不引入 MySQL/Redis。
+- 配置：`backend/.env`（已 gitignore）放 DashScope / DeepSeek 密钥、音色、人设（`RAG_ASSISTANT_NAME` / `RAG_PLATFORM_NAME`）；未配置时语音入口自动隐藏。
+- 提示词：`backend/pp7rag/engine/prompts.py` 已按本项目改写（平台名参数化、1801 字、去标签词、来源由界面展示），启动时预热嵌入模型与 LLM/TTS 连接，空回答改为显式错误。见 `docs/2026-11-12-prompt-optimization.md`。
+- 依赖：torch(CPU) / chromadb 0.5.23 / sentence-transformers / jieba / python-multipart 等，已装进 `backend/.venv`。
+- 验收：健康检查全绿；`/ask` 实测 2.2s / 107 字；`/tts` 0.9s 出 24k WAV；`/asr` 回环识别成功；
+  Chrome headless 实测「文字提问 → 真答案 + 来源卡片」「假麦克风说话 → 流式识别 → 自动作答 → 播报」「管理后台渲染真实统计」。
+  详见 `docs/2026-11-11-backend-port-and-admin.md`。
+
+## 2026-11-10 深色生命周期看板
 
 按机主参考稿「软件学院项目实践聚合平台(1).html」复刻，并执行批注：删除「部署」阶段列、把「已投产」改为「上线」、详情抽屉底部增加多张「项目图片」并支持点击放大；看板左侧预留 600px 空白区，供后续接入宠物小人。
 

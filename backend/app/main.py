@@ -1,6 +1,8 @@
 """FastAPI 入口：API + 静态前端托管。"""
 from __future__ import annotations
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,8 +13,31 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import APP_TITLE, APP_VERSION, CORS_ORIGINS, FRONTEND_DIST, REPO_ROOT
 from .db import SessionLocal, init_db
+from .admin_compat import router as admin_router
+from pp7rag.ragapi.routes import router as rag_router
+
+logger = logging.getLogger(__name__)
 from .routers.api import router as api_router
 from .seed import seed_if_empty
+
+
+async def _warmup_rag() -> None:
+    """预热数字人后端：嵌入模型 + LLM/TTS/HTTP 连接，避免重启后第一次提问冷启动失败。"""
+    try:
+        from pp7rag.engine.retriever import get_shared_encoder
+
+        await asyncio.to_thread(get_shared_encoder)
+        logger.info("rag_warmup_encoder_ready")
+    except Exception as exc:  # 预热失败不影响服务启动
+        logger.warning("rag_warmup_encoder_failed: %s", exc)
+    try:
+        from pp7rag.ragapi.providers import http as rag_http
+        from pp7rag.ragapi.providers import llm, tts
+
+        await asyncio.gather(llm.warmup(), rag_http.warmup(), tts.warmup(), return_exceptions=True)
+        logger.info("rag_warmup_providers_ready")
+    except Exception as exc:
+        logger.warning("rag_warmup_providers_failed: %s", exc)
 
 
 @asynccontextmanager
@@ -20,7 +45,11 @@ async def lifespan(_app: FastAPI):
     init_db()
     with SessionLocal() as session:
         seed_if_empty(session)
-    yield
+    warmup_task = asyncio.create_task(_warmup_rag())
+    try:
+        yield
+    finally:
+        warmup_task.cancel()
 
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION, lifespan=lifespan)
@@ -34,6 +63,10 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+# 数字人：RAG 问答 + TTS/ASR + 知识库管理（移植自 pp7，前缀 /api/v1/rag）
+app.include_router(rag_router)
+# 管理后台：会话/统计（映射到 RAG 的 SQLite 问答日志）
+app.include_router(admin_router)
 
 MEDIA_DIR = REPO_ROOT / "assets" / "images"
 if MEDIA_DIR.exists():
