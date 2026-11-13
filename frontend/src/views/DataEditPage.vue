@@ -209,6 +209,12 @@ const save = () => {
       }))
     }))
   }
+  const serialized = JSON.stringify(payload)
+  if (serialized.length > 2_400_000) {
+    messageType.value = 'error'
+    message.value = '保存内容约 ' + (serialized.length / 1024 / 1024).toFixed(1) + ' MB，超出浏览器本地存储上限；请删减项目图片（建议总量不超过 10 张）后再保存。'
+    return
+  }
   try {
     saveKanbanData(payload)
     messageType.value = 'info'
@@ -310,7 +316,7 @@ const restoreDefaults = () => {
                 </div>
                 <div v-else class="image-empty">还没有项目图片，点击上方「上传图片」或把图片拖进来</div>
               </div>
-              <p class="image-hint">支持多选，单张不超过 12 MB，上传后自动压缩为最长边 1400px。</p>
+              <p class="image-hint">支持多选，单张不超过 12 MB，上传后自动压缩为最长边 1400px；图片存在浏览器本地，建议总量不超过 10 张。</p>
             </div>
           </div>
 

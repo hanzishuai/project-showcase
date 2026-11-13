@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import {
   KANBAN_TREND,
   KANBAN_WEEKS,
@@ -8,6 +8,8 @@ import {
   type KanbanProject,
   type KanbanVersion
 } from '../kanban/data'
+import { registerAction } from '../agent/bus'
+import { uiState } from '../agent/uiState'
 
 interface VersionView extends KanbanVersion {
   id: string
@@ -20,6 +22,8 @@ interface VersionView extends KanbanVersion {
 const kanbanData = loadKanbanData()
 const KANBAN_STAGES = kanbanData.stages
 const KANBAN_PROJECTS = kanbanData.projects
+
+// 数字人已移到全局浮层（components/AgentDock.vue），这里只负责把界面状态同步过去并注册可被调用的动作。
 
 const appEl = ref<HTMLDivElement | null>(null)
 const stageChartEl = ref<HTMLDivElement | null>(null)
@@ -250,11 +254,108 @@ const showOverview = async () => {
 
 watch(activeView, showOverview)
 
+/* ---------------------- Agent：把看板操作暴露给数字人 ---------------------- */
+
+const agentOffs: Array<() => void> = []
+
+const setupAgentActions = () => {
+  agentOffs.push(
+    registerAction('set_board_view', (args) => {
+      const view = String(args.view ?? 'board')
+      if (view !== 'board' && view !== 'overview') return false
+      switchView(view)
+      return true
+    }),
+    registerAction('filter_board', (args) => {
+      if ('project' in args) projectFilter.value = String(args.project ?? '')
+      if ('advisor' in args) ownerFilter.value = String(args.advisor ?? '')
+      if ('show_history' in args) historyOnly.value = Boolean(args.show_history)
+      if (activeView.value !== 'board') switchView('board')
+      const count = filteredVersions.value.length
+      const who = String(args.advisor ?? '').trim()
+      return who ? `已按「${who}」筛出 ${count} 个项目` : `已筛出 ${count} 个项目`
+    }),
+    registerAction('open_project', (args) => {
+      const name = String(args.project ?? '').trim()
+      const version = String(args.version ?? '').trim()
+      if (!name) return false
+      const exact = versions.find((item) => item.project.name === name && (!version || item.number === version))
+      const target =
+        exact ??
+        versions.find((item) => item.project.name.includes(name) || name.includes(item.project.name))
+      if (!target) return false
+      switchView('board')
+      openDrawer(target.id)
+      return `已打开「${target.project.name}」`
+    }),
+    registerAction('close_drawer', () => {
+      closeDrawer()
+      return true
+    }),
+    registerAction('open_gallery', (args) => {
+      const projectName = String(args.project ?? '').trim()
+      if (projectName) {
+        const exact = versions.find((item) => item.project.name === projectName && item.current)
+        const target =
+          exact ??
+          versions.find((item) => item.project.name === projectName) ??
+          versions.find((item) => item.project.name.includes(projectName) || projectName.includes(item.project.name))
+        if (!target) return false
+        switchView('board')
+        openDrawer(target.id)
+      }
+      if (!selected.value) return false
+      const total = selected.value.project.images.length
+      if (!total) return false
+      const index = Math.min(Math.max(Number(args.index ?? 0), 0), total - 1)
+      openGallery(index)
+      return `已打开「${selected.value.project.name}」的项目图片`
+    }),
+    registerAction('step_gallery', (args) => {
+      if (!selected.value || galleryIndex.value < 0) return false
+      stepGallery(Number(args.delta) >= 0 ? 1 : -1)
+      return true
+    }),
+    registerAction('close_gallery', () => {
+      closeGallery()
+      return true
+    })
+  )
+}
+
+// 把看板状态同步给 Agent 作为上下文
+watchEffect(() => {
+  uiState.boardView = activeView.value
+  uiState.projectFilter = projectFilter.value
+  uiState.advisorFilter = ownerFilter.value
+  uiState.showHistory = historyOnly.value
+  uiState.openProject = selected.value?.project.name ?? ''
+  uiState.modalOpen = galleryOpen.value
+  uiState.galleryOpen = galleryOpen.value
+  uiState.galleryIndex = galleryIndex.value
+  uiState.visibleCards = filteredVersions.value.length
+  uiState.boardProjects = KANBAN_PROJECTS.map((project) => {
+    const current = versions.find((item) => item.project.name === project.name && item.current)
+    return {
+      name: project.name,
+      version: current?.number ?? '',
+      stage: current ? KANBAN_STAGES[current.stage]?.name ?? '' : '',
+      advisor: project.owner,
+      stack: project.stack.join('·'),
+      team: project.team,
+      users: project.users,
+      features: project.features
+    }
+  })
+  uiState.projects = projectNames
+})
+
 onMounted(() => {
   fit()
   window.addEventListener('resize', fit)
   document.addEventListener('keydown', onKeydown)
   showOverview()
+  setupAgentActions()
 })
 
 onBeforeUnmount(() => {
@@ -262,6 +363,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
   charts.forEach((chart) => chart.dispose())
   charts = []
+  agentOffs.splice(0).forEach((off) => off())
 })
 </script>
 
@@ -278,6 +380,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="nav-right">
         <a class="nav-action" href="#/edit">数据修改</a>
+        <a class="nav-action" href="#/admin">管理后台</a>
         <nav class="nav-tabs" aria-label="页面视图">
           <button class="tab" :class="{ active: activeView === 'overview' }" type="button" @click="switchView('overview')">数据总览</button>
           <button class="tab" :class="{ active: activeView === 'board' }" type="button" @click="switchView('board')">生命周期看板</button>
@@ -365,6 +468,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="board-main">
+        <!-- 左侧 600px 留白区：数字人已移到全局浮层（AgentDock），这里只保留布局占位 -->
         <div class="pet-stage" aria-hidden="true"></div>
         <div class="lanes">
         <section v-for="(lane, laneIndex) in lanes" :key="lane.name" class="lane">

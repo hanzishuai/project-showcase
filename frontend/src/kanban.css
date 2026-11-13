@@ -17,7 +17,10 @@
 .lightbox-nav:hover,.lightbox-close:hover{background:#2A3550}
 .lightbox-caption{margin-top:16px;color:var(--muted);font-size:13px;letter-spacing:.02em}
 .board-main{display:flex;gap:16px;flex:1;min-height:0}
-.pet-stage{width:600px;flex:none;pointer-events:none}
+.pet-stage{position:relative;width:600px;flex:none;pointer-events:none;border-radius:12px}
+/* 数字人全局浮层：看板页贴合 .pet-stage，其它页缩到右下角 */
+.agent-dock{position:fixed;z-index:8;pointer-events:none;transform-origin:top left;--pp7-z-index:1}
+.agent-dock > *{pointer-events:auto}
 .usage-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .usage-stat{position:relative;background:#171F2F;border:1px solid var(--line);border-radius:12px;padding:14px 14px 13px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
 .usage-stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.9}
@@ -98,3 +101,124 @@
 .editor-main::-webkit-scrollbar{width:10px}
 .editor-main::-webkit-scrollbar-thumb{background:#2A3550;border-radius:6px}
 .editor-main::-webkit-scrollbar-track{background:transparent}
+
+
+/* ------------------------- 数字人（PP7 RAG 数字人组件） ------------------------- */
+/* 左侧 600px 留白区：上半部分人物立绘，下半部分对话面板。 */
+.agent-dock .pp7-rag-avatar{position:absolute;inset:0;width:100%;height:100%;max-width:none;max-height:none;transform:none;z-index:2}
+.agent-dock .pp7-rag-avatar__stage{flex:0 0 55%;min-height:0}
+/* 立绘按 600 宽裁成半身（cover）：人物更有存在感，下缘自然被对话框挡住 */
+.agent-dock .pp7-avatar-figure,
+.agent-dock .pp7-avatar-sway,
+.agent-dock .pp7-avatar-inner{width:100%}
+.agent-dock .pp7-avatar-image{width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;object-position:top center}
+.agent-dock .pp7-rag-avatar__panel{width:100%;min-height:0}
+.agent-dock .pp7-chat-panel{border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+/* 主题色对齐看板深色 token（--bg/--panel/--line/--text/--muted + 品牌青） */
+.agent-dock .pp7-rag-avatar[data-theme='dark'],
+.agent-dock .pp7-chat-panel[data-theme='dark'],
+.agent-dock .pp7-avatar-stage[data-theme='dark']{
+  --pp7-panel-bg:rgba(18,24,38,.94);
+  --pp7-panel-border:rgba(255,255,255,.06);
+  --pp7-header-bg:rgba(255,255,255,.02);
+  --pp7-input-bar-bg:rgba(11,15,25,.5);
+  --pp7-border:rgba(255,255,255,.08);
+  --pp7-border-strong:rgba(255,255,255,.16);
+  --pp7-subtle-border:rgba(255,255,255,.05);
+  --pp7-fg:#E6EDF7;
+  --pp7-fg-secondary:#C3CDDC;
+  --pp7-fg-muted:#8B98AD;
+  --pp7-fg-dim:#5A667A;
+  --pp7-accent:rgba(34,211,238,.92);
+  --pp7-accent-hover:rgba(56,189,248,1);
+  --pp7-accent-soft:rgba(34,211,238,.14);
+  --pp7-accent-border:rgba(34,211,238,.42);
+  --pp7-bubble-user:linear-gradient(135deg,rgba(34,211,238,.9),rgba(59,130,246,.92));
+  --pp7-bubble-assistant:rgba(255,255,255,.045);
+  --pp7-bubble-assistant-border:rgba(255,255,255,.06);
+  --pp7-avatar-glow:rgba(34,211,238,.32);
+  --pp7-avatar-accent:rgba(34,211,238,.85);
+  --pp7-shadow:0 8px 28px rgba(0,0,0,.4);
+}
+
+
+/* 参考资料：从「大卡片」压成一行「来源：文档名」 */
+.agent-dock .pp7-chat-sources{
+  max-width:100%;
+  margin:2px 0 0;
+  font-size:11px;
+  line-height:1.5;
+  color:#5A667A;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.agent-dock .pp7-chat-sources::before{content:'来源：';color:#5A667A}
+.agent-dock .pp7-chat-sources__caption{display:none}
+.agent-dock .pp7-chat-sources ul{
+  flex-direction:row;
+  flex-wrap:wrap;
+  gap:4px 14px;
+  margin:0;
+  padding:0;
+}
+.agent-dock .pp7-chat-sources li,
+.agent-dock .pp7-chat-sources__item{
+  padding:0;
+  border:0;
+  background:none;
+  border-radius:0;
+  box-shadow:none;
+}
+.agent-dock .pp7-chat-sources__head{gap:6px;justify-content:flex-start}
+.agent-dock .pp7-chat-sources__badge,
+.agent-dock .pp7-chat-sources__score,
+.agent-dock .pp7-chat-sources__snippet,
+.agent-dock .pp7-chat-sources__toggle,
+.agent-dock .pp7-chat-sources__full{display:none}
+.agent-dock .pp7-chat-sources__title{
+  color:#8B98AD;
+  font-weight:400;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+}
+
+/* 浮层的收起按钮与圆形入口（非看板页） */
+.agent-dock__toggle{
+  position:absolute;
+  top:6px;
+  right:8px;
+  z-index:3;
+  width:26px;
+  height:26px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:8px;
+  background:rgba(18,24,38,.9);
+  color:#8B98AD;
+  font-size:13px;
+  line-height:1;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.agent-dock__toggle:hover{color:#E6EDF7;border-color:rgba(34,211,238,.5)}
+.agent-dock.is-collapsed .agent-dock__toggle{top:-10px;right:-10px;border-radius:50%}
+.agent-dock__bubble{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  padding:0;
+  border-radius:50%;
+  overflow:hidden;
+  border:2px solid rgba(34,211,238,.55);
+  background:#121826;
+  cursor:pointer;
+  pointer-events:auto;
+  box-shadow:0 8px 28px rgba(0,0,0,.45);
+  transition:transform .15s ease, border-color .15s ease;
+}
+.agent-dock__bubble:hover{transform:scale(1.05);border-color:rgba(34,211,238,.9)}
+.agent-dock__bubble img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
