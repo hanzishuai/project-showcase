@@ -1,7 +1,18 @@
 import asyncio
 import logging
 import time
+
+# Chroma 0.5.x 的遥测依赖旧版 posthog，会持续刷 ERROR 日志；这里直接关掉客户端遥测。
+try:
+    import posthog
+
+    posthog.disabled = True
+except Exception:
+    pass
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+
 from chromadb import PersistentClient
+from chromadb.config import Settings as ChromaSettings
 from chromadb.utils import embedding_functions
 from sentence_transformers import SentenceTransformer
 from pp7rag.config import settings
@@ -27,7 +38,11 @@ def get_shared_encoder() -> SentenceTransformer:
 
 class Retriever:
     def __init__(self):
-        self._client = PersistentClient(path=str(settings.chroma_path))
+        # 关闭 Chroma 匿名遥测（0.5.x 默认开启且会报错刷屏）
+        self._client = PersistentClient(
+            path=str(settings.chroma_path),
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
         self._embedding_function = None
 
     @property

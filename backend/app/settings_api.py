@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -82,11 +83,8 @@ _PROTECTED = {"llm_api_key", "dashscope_api_key"}
 
 
 def _mask(value: str) -> str:
-    if not value:
-        return ""
-    if len(value) <= 8:
-        return "****"
-    return value[:4] + "****" + value[-4:]
+    # 不再回显首尾字符，避免无意义泄露；前端用 configured 判断是否已配置
+    return "****" if value else ""
 
 
 def _coerce(key: str, value: Any) -> Any:
@@ -117,7 +115,9 @@ def _read_overrides() -> dict[str, Any]:
 
 def _write_overrides(data: dict[str, Any]) -> None:
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = SETTINGS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, SETTINGS_FILE)  # 原子替换，避免断电留下半个 JSON
 
 
 def apply_overrides() -> None:
@@ -162,7 +162,6 @@ async def list_settings() -> dict:
         groups.setdefault(item["group"], []).append(item)
     return {
         "groups": [{"name": name, "items": value} for name, value in groups.items()],
-        "file": str(SETTINGS_FILE),
         "note": "密钥保存在本机文件里，接口只返回掩码；改动立即生效，无需重启。",
     }
 
@@ -188,12 +187,16 @@ async def update_settings(payload: SettingsUpdate) -> dict:
         text = str(value).strip()
         if key in _PROTECTED and text == "":
             continue  # 空表示不修改密钥
-        if key in _PROTECTED and set(text) == {"*"}:
-            continue
+        if key in _PROTECTED and "*" in text:
+            continue  # 掩码值（****）不能被当成真实密钥写回
         try:
             converted = _coerce(key, value)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"{EDITABLE[key]['label']} 的取值不合法")
+        if key == "llm_base_url":
+            base = str(converted).strip()
+            if not (base.startswith("https://") or base.startswith("http://")):
+                raise HTTPException(status_code=400, detail="API 地址必须以 http:// 或 https:// 开头")
         if key == "rag_top_k":
             converted = max(1, min(10, int(converted)))
         if key == "rag_reference_max_chars":

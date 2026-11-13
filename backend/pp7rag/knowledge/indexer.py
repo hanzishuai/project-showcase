@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from chromadb import PersistentClient
+from chromadb.config import Settings as ChromaSettings
 from chromadb.utils import embedding_functions
 from pp7rag.config import settings
 from pp7rag.knowledge.revision import KnowledgeRevision
@@ -9,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeIndexer:
     def __init__(self):
-        self._client = PersistentClient(path=str(settings.chroma_path))
+        self._client = PersistentClient(
+            path=str(settings.chroma_path),
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
         self._embedding_function = None
         self._collection = None
 

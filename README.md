@@ -15,7 +15,7 @@ project-showcase/
 │  │  ├─ schemas.py         Pydantic 出入参
 │  │  ├─ seed.py            从 data/projects.json 灌种子
 │  │  └─ routers/api.py     REST 路由
-│  ├─ tests/                pytest 契约测试（9 条）
+│  ├─ tests/                pytest 契约/安全测试（13 条）
 │  ├─ pp7rag/               数字人 RAG 后端（移植自 pp7：检索 / 问答 / TTS / ASR）
 │  └─ app/admin_compat.py   管理后台接口（映射到 SQLite 问答日志）
 │  ├─ data/app.db           SQLite 数据库（首次启动自动生成）
@@ -24,7 +24,6 @@ project-showcase/
 │  ├─ src/App.vue           直接渲染 KanbanPage
 │  ├─ src/views/KanbanPage.vue  数据总览 + 生命周期看板双视图
 │  ├─ src/kanban/data.ts    看板数据（9 个演示项目 / 19 个版本）
-│  ├─ src/kanban/localRag.ts 数字人本地问答（浏览器内规则回答，不联网）
 │  ├─ src/kanban.css        深色看板样式（1920×1080 等比缩放）
 │  ├─ vendor/rag-avatar/    PP7 RAG 数字人组件构建产物（vendored）
 │  ├─ src/views/            旧 DashboardView / ProjectDetailView 保留未挂入口
@@ -37,13 +36,90 @@ project-showcase/
 
 ## 一键启动
 
+先把 `backend/.env.example` 复制为 `backend/.env`，填入 DashScope / DeepSeek 密钥（不填也能启动，但语音与真实问答不可用）。
+
 双击 `start.cmd`（或运行 `powershell -ExecutionPolicy Bypass -File start.ps1`）：
 
-1. 首次会自动 `uv venv` + 安装后端依赖；
-2. 首次会自动 `npm install` + `npm run build`；
+1. 首次自动创建 Python 虚拟环境并安装后端依赖（优先用 uv；没装 uv 时回退到 `python -m venv`）；
+2. 首次自动 `npm install` + `npm run build`；
 3. 启动 `http://127.0.0.1:8000`，浏览器自动打开；API 文档在 `/docs`。
 
-> 需要本机有 `uv` 与 `npm`。前端构建完成后由后端直接托管，离线可用，无 CDN。
+可选环境变量：`APP_HOST`（默认 `127.0.0.1`）、`APP_PORT`（默认 `8000`）、`APP_FORCE_BUILD=1`（强制重建前端）。
+PowerShell 示例：`$env:APP_HOST='0.0.0.0'; $env:APP_PORT='8080'; .\start.ps1`
+
+> 需要本机有 Python 3.12 与 Node.js 20+（uv 可选）。前端构建完成后由后端直接托管，离线可用，无 CDN。
+
+## 上线部署（生产 / 演示环境）
+
+### 环境要求
+
+| 项 | 要求 |
+|---|---|
+| 操作系统 | Windows 10/11 x64（当前脚本）；Linux 可手动运行 uvicorn |
+| Python | 3.12（torch / chromadb 按 CPU 环境验证） |
+| Node.js | 20+（仅构建前端；构建产物由后端托管） |
+| 内存/磁盘 | 建议 8GB+ 内存；依赖约 1.3GB，首次会下载嵌入模型约 100MB |
+| 网络 | 需要访问 DeepSeek / 百炼；首次还需下载嵌入模型；断网时看板与静态后台可用，问答/语音不可用 |
+
+> Windows + Python 3.12 下 `chroma-hnswlib 0.7.6` 没有官方 cp312 轮子，首次安装需要 MSVC Build Tools。
+> 仓库已内置本机编译好的 `backend/wheels/chroma_hnswlib-0.7.6-cp312-cp312-win_amd64.whl`，
+> `start.ps1` 会自动加 `--find-links backend/wheels`，因此普通新机无需 MSVC；换 Python 小版本/非 Windows 时请重新准备对应 wheel。
+
+### 首次部署
+
+1. 复制 `backend/.env.example` → `backend/.env`，填 `DASHSCOPE_API_KEY`、`LLM_API_KEY` 等；
+2. 运行 `start.cmd`（首次安装依赖 + 构建，需数分钟；安装时优先使用 `backend/wheels` 里的本地轮子）；
+3. 打开 `http://127.0.0.1:8000`，用 `GET /api/ready`（DB 就绪）和 `GET /api/v1/rag/health`（LLM/Chroma 能力）做健康检查；
+4. 首次启动如果 `backend/data/chroma_storage` 为空且 `backend/data/docs` 有文档，服务会自动重建一次索引；也可以在管理后台「知识库管理」点「重建索引」。
+
+### 端口与监听
+
+- 默认只监听 `127.0.0.1`，仅本机可访问；
+- 内网访问：`$env:APP_HOST='0.0.0.0'; $env:ADMIN_TOKEN='<口令>'; $env:APP_PORT='8080'; .\start.ps1`，并在防火墙放行端口；
+- 公网访问：**必须先加反向代理（Nginx/Caddy）+ 登录鉴权与 HTTPS**。`ADMIN_TOKEN` 只是应用层口令，不能替代登录体系。
+
+### 访问控制（可选，但共享/内网部署建议开启）
+
+| 环境变量 | 作用 |
+|---|---|
+| `ADMIN_TOKEN` | 设置后，管理后台、系统设置、问答日志、知识库管理、项目写接口都要求请求头 `X-Admin-Token`；管理后台首次进入会弹出口令输入框。监听非本机地址时 `start.ps1` 会强制要求设置（已有反向代理鉴权时可用 `ALLOW_INSECURE=1` 跳过检查）。 |
+| `APP_RATE_LIMIT_PER_MIN` | 费用型接口（ask / tts / asr / agent / 设置测试）每 IP 每分钟限流，默认 120，0 表示关闭。 |
+| `APP_ENABLE_DOCS=0` | 关闭 `/docs` 与 `/openapi.json`。 |
+| `APP_WARMUP=0` | 关闭启动预热（离线调试/测试用）。 |
+| `APP_LOG_FILE` | 应用日志写入文件（`start.ps1` 默认写入 `backend/data/app.log`；访问日志在控制台，NSSM/重定向负责落盘）。 |
+| `ALLOW_INSECURE=1` | 明确表示已由反向代理做登录鉴权，允许在非本机监听且不设 `ADMIN_TOKEN` 时启动。 |
+
+> **注意**：`ADMIN_TOKEN` 只覆盖 HTTP 管理面；`WS /api/v1/rag/stream`、`WS /api/v1/rag/asr/stream` 等 WebSocket 接口不经过该中间件，公网部署必须在反向代理层做全站登录鉴权。
+>
+> 上线前请确认：`.env` 与 `backend/data/settings.json` 仅服务账号可读（Windows 示例：`icacls backend\.env /inheritance:r /grant:r "$env:USERNAME:(R)"`，`settings.json` 同理）；如曾把端口暴露到不可信网络，建议轮换 DeepSeek / 百炼密钥。
+
+### 数据与备份
+
+- 数据目录：`backend/data/`
+  - `app.db`：项目/版本 SQLite；
+  - `qa_log.sqlite3`：问答日志（含用户提问内容，注意清理）；
+  - `chroma_storage/`：向量库；
+  - `settings.json`：后台改过的运行参数（含密钥，已 gitignore）。
+- 备份：建议先停服务，然后运行 `powershell -ExecutionPolicy Bypass -File scripts\backup-data.ps1`（SQLite 用 backup API 生成一致快照，默认生成到 `backups/`；默认**不包含** `settings.json`，需要时加 `-IncludeSecrets`）；
+- 恢复：解压备份 zip，把其中的 `app.db`、`qa_log.sqlite3`、`chroma_storage/`、`docs/` 放回 `backend/data/`（如备份带 `settings.json` 一并放回），再启动服务；
+- 注意：`settings.json` 是后台改过的参数覆盖层，优先级高于 `.env`；轮换密钥后如果旧值还在 settings.json，会继续生效，需要同步清理。
+
+### 升级与回滚
+
+1. 更新代码后执行 `cd frontend; npm ci; npm run build`（或设置 `APP_FORCE_BUILD=1` 再运行 start.ps1）；
+2. 重启服务；
+3. 前端资源带 hash 且缓存一年，`index.html` 不缓存，升级后刷新即可生效；
+4. 回滚：先 `git stash` 或提交本地改动，再 `git checkout <tag/提交>`，重新构建并重启；数据按上一节备份恢复。发布建议打 tag（例如 `v1.0.0`），部署只用 tag 产物。
+
+### 运维建议
+
+- 用 NSSM / Windows 任务计划程序托管，例如：
+  `nssm install ProjectShowcase "powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File E:\...\start.ps1"`，
+  在 NSSM 里设置 AppDirectory、stdout/stderr 日志、失败自动重启与开机自启；
+- 在反向代理层加 HTTPS、登录鉴权与限流（Caddy 示例：`reverse_proxy 127.0.0.1:8000` + `basic_auth`）；
+- `start.ps1` 会把应用日志写入 `backend/data/app.log`；访问日志在控制台，交给 NSSM 重定向并按天/大小轮转；
+- 定期归档/清理 `qa_log.sqlite3`；
+- 设置 `APP_ENABLE_DOCS=0` 可关闭 `/docs` 与 `/openapi.json`（关闭后这两个路径返回 404）。
 
 ## 页面
 
@@ -60,17 +136,17 @@ project-showcase/
 看板左侧预留的 600px 空白区接入 PP7 的可嵌入数字人（`@pp7/rag-avatar` 0.4.0），
 并且把 PP7 的 RAG 后端**并进了本项目后端**（同一进程、同一 8000 端口），管理后台也集成进前端。
 
-- 数字人：`frontend/vendor/rag-avatar/`（构建产物，来源与补丁见 `PROVENANCE.md`），挂在 `KanbanPage.vue` 的 `.pet-stage`。
+- 数字人：`frontend/vendor/rag-avatar/`（构建产物，来源与补丁见 `PROVENANCE.md`），由全局浮层 `components/AgentDock.vue` 挂载并贴合看板左侧 `.pet-stage` 留白区。
 - 后端：`backend/pp7rag/`（移植自 pp7，只改了 import；26 个文件），提供 `/api/v1/rag/*`：
   `ask`（SSE 流式）、`suggestions`、`feedback`、`qa/stats|recent`、`asr`、`tts`、`tts/stream`、`health`、`knowledge/*`，
   以及 `WS /api/v1/rag/stream`（token + PCM 单连接）和 `WS /api/v1/rag/asr/stream`（边说边识别）。
 - 能力：Chroma 向量检索 + DeepSeek 生成的真实问答；DashScope Qwen3 的 TTS/ASR；打断、推荐问题。
 - 来源展示：只显示一行「来源：文档名」—— 后端按文档把多个检索分块合并成一条来源（`build_sources`），前端用样式把组件自带的资料大卡片压成一行（不显示摘要/匹配度/展开原文）。
-- 管理后台：`#/admin`（工作概览 / 对话记录 / 知识库管理 / 系统设置），无鉴权（同 PP7 原设计），系统设置可在线改模型/密钥/音色/检索参数并立即生效；
+- 管理后台：`#/admin`（工作概览 / 对话记录 / 知识库管理 / 系统设置），默认无鉴权（仅限本机）；设置 `ADMIN_TOKEN` 后管理面需要口令，公网仍需反向代理登录鉴权。系统设置可在线改模型/密钥/音色/检索参数并立即生效；
   会话数据来自 `/api/admin/*` —— 由 `backend/app/admin_compat.py` 从 SQLite 问答日志聚合，不引入 MySQL/Redis。
 - 配置：`backend/.env`（已 gitignore）放 DashScope / DeepSeek 密钥、音色、人设（`RAG_ASSISTANT_NAME` / `RAG_PLATFORM_NAME`）；未配置时语音入口自动隐藏。
 - 提示词：`backend/pp7rag/engine/prompts.py` 已按本项目改写（平台名参数化、1801 字、去标签词、来源由界面展示），启动时预热嵌入模型与 LLM/TTS 连接，空回答改为显式错误。见 `docs/2026-11-12-prompt-optimization.md`。
-- 依赖：torch(CPU) / chromadb 0.5.23 / sentence-transformers / jieba / python-multipart 等，已装进 `backend/.venv`。
+- 依赖：完整清单见 `backend/requirements.txt`（直接依赖）与 `backend/requirements.lock.txt`（当前虚拟环境完整锁定）；已装进 `backend/.venv`。
 - 验收：健康检查全绿；`/ask` 实测 2.2s / 107 字；`/tts` 0.9s 出 24k WAV；`/asr` 回环识别成功；
   Chrome headless 实测「文字提问 → 真答案 + 来源卡片」「假麦克风说话 → 流式识别 → 自动作答 → 播报」「管理后台渲染真实统计」。
   详见 `docs/2026-11-11-backend-port-and-admin.md`。

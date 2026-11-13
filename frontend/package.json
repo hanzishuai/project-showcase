@@ -12,6 +12,9 @@
     "test:agent:voice": "node ../scripts/agent-voice-selftest.mjs",
     "test:agent:tts": "node ../scripts/tts-segment-selftest.mjs"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "echarts": "^5.5.1",
     "vue": "^3.5.13",

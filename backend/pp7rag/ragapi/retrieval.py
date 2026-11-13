@@ -25,7 +25,7 @@ RRF_K = 60
 
 
 def _api_key() -> str:
-    return settings.dashscope_api_key or settings.omni_api_key or settings.tts_api_key
+    return settings.dashscope_api_key or settings.omni_api_key or getattr(settings, "tts_api_key", "")
 
 
 def _rrf(rank: int) -> float:

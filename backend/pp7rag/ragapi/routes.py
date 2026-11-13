@@ -56,6 +56,21 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+async def _read_upload_limited(file: UploadFile, limit: int, label: str) -> bytes:
+    """边读边计数，避免先 read() 整个大文件再判大小造成内存打满。"""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail=f"{label}超过 {limit // (1024 * 1024)}MB 上限")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 # ---------------------------------------------------------------------------
 # Q&A
 # ---------------------------------------------------------------------------
@@ -111,11 +126,9 @@ async def asr_endpoint(file: UploadFile = File(...)) -> dict:
     """Transcribe one WAV clip (16 kHz mono 16-bit PCM) into text."""
     if not asr.is_configured():
         raise HTTPException(status_code=503, detail="语音识别未配置。")
-    audio = await file.read()
+    audio = await _read_upload_limited(file, MAX_AUDIO_BYTES, "音频文件")
     if not audio:
         raise HTTPException(status_code=400, detail="音频内容为空。")
-    if len(audio) > MAX_AUDIO_BYTES:
-        raise HTTPException(status_code=413, detail="音频文件过大。")
     try:
         text = await asr.transcribe(audio)
     except asr.ASRError as exc:
@@ -192,7 +205,9 @@ async def knowledge_preview(file: UploadFile = File(...)) -> dict:
     """Parse a docx/pdf/md upload and return chunk preview without touching the index."""
     from urllib.parse import unquote
 
-    data = await file.read()
+    from pp7rag.ragapi.knowledge_import import MAX_UPLOAD_BYTES
+
+    data = await _read_upload_limited(file, MAX_UPLOAD_BYTES, "文件")
     filename = unquote(file.filename or "upload")
     try:
         return await asyncio.to_thread(knowledge_import.preview, filename, data)
@@ -210,7 +225,7 @@ async def knowledge_commit(request: CommitRequest) -> dict:
         result = await asyncio.to_thread(knowledge_import.commit, request.filename, request.markdown)
     except Exception as exc:
         logger.exception("knowledge_commit_failed")
-        raise HTTPException(status_code=500, detail=f"入库失败：{exc}") from exc
+        raise HTTPException(status_code=500, detail="入库失败，请检查文件内容或查看服务端日志。") from exc
     return {"status": "committed", **result}
 
 
