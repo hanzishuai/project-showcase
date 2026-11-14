@@ -36,6 +36,8 @@ const ownerFilter = ref('')
 const historyOnly = ref(false)
 const selected = ref<VersionView | null>(null)
 const galleryIndex = ref(-1)
+const slideIndex = ref(0)
+let slideshowTimer: number | null = null
 
 let charts: echarts.ECharts[] = []
 
@@ -135,18 +137,52 @@ const switchView = (view: 'overview' | 'board') => {
   activeView.value = view
   closeDrawer()
 }
+const stopSlideshow = () => {
+  if (slideshowTimer !== null) {
+    window.clearInterval(slideshowTimer)
+    slideshowTimer = null
+  }
+}
+const startSlideshow = () => {
+  stopSlideshow()
+  const total = galleryImages.value.length
+  if (!selected.value || total <= 1 || galleryOpen.value) return
+  slideshowTimer = window.setInterval(() => {
+    if (selected.value && !galleryOpen.value) {
+      slideIndex.value = (slideIndex.value + 1) % galleryImages.value.length
+    }
+  }, 4000)
+}
+const setSlide = (index: number) => {
+  const total = galleryImages.value.length
+  if (!total) return
+  slideIndex.value = ((index % total) + total) % total
+  startSlideshow()
+}
+const stepSlide = (delta: number) => setSlide(slideIndex.value + delta)
 const openDrawer = (id: string) => {
   const version = versions.find((item) => item.id === id)
-  if (version) { selected.value = version; galleryIndex.value = -1 }
+  if (version) {
+    selected.value = version
+    galleryIndex.value = -1
+    slideIndex.value = 0
+    startSlideshow()
+  }
 }
 const closeDrawer = () => {
+  stopSlideshow()
   selected.value = null
   galleryIndex.value = -1
+  slideIndex.value = 0
 }
 const openGallery = (index: number) => {
+  stopSlideshow()
   if (index >= 0 && index < galleryImages.value.length) galleryIndex.value = index
 }
-const closeGallery = () => { galleryIndex.value = -1 }
+const closeGallery = () => {
+  galleryIndex.value = -1
+  startSlideshow()
+}
 const stepGallery = (delta: number) => {
   const total = galleryImages.value.length
   if (!total) return
@@ -165,6 +201,8 @@ const onKeydown = (event: KeyboardEvent) => {
   }
   if (galleryOpen.value && event.key === 'ArrowLeft') { event.preventDefault(); stepGallery(-1) }
   if (galleryOpen.value && event.key === 'ArrowRight') { event.preventDefault(); stepGallery(1) }
+  if (drawerOpen.value && !galleryOpen.value && event.key === 'ArrowLeft') { event.preventDefault(); stepSlide(-1) }
+  if (drawerOpen.value && !galleryOpen.value && event.key === 'ArrowRight') { event.preventDefault(); stepSlide(1) }
 }
 
 const chartTip = {
@@ -359,6 +397,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopSlideshow()
   window.removeEventListener('resize', fit)
   document.removeEventListener('keydown', onKeydown)
   charts.forEach((chart) => chart.dispose())
@@ -591,21 +630,49 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="section">
-            <h3>项目图片<span class="section-count">{{ selected.project.images.length }} 张</span></h3>
-            <div class="shot-gallery">
-              <button
-                v-for="(src, index) in selected.project.images"
-                :key="src + index"
-                class="shot-thumb"
-                type="button"
-                :aria-label="'放大查看 ' + selected.project.name + ' 第 ' + (index + 1) + ' 张图片'"
-                @click="openGallery(index)"
+            <h3>项目图片<span class="section-count">{{ galleryImages.length }} 张</span></h3>
+            <div v-if="galleryImages.length" class="shot-slideshow">
+              <div
+                class="shot-slide"
+                role="button"
+                tabindex="0"
+                :aria-label="'放大查看 ' + selected.project.name + ' 第 ' + (slideIndex + 1) + ' 张图片'"
+                @click="openGallery(slideIndex)"
+                @keydown.enter="openGallery(slideIndex)"
               >
-                <img :src="src" :alt="selected.project.name + ' 界面截图 ' + (index + 1)" loading="lazy" />
-                <span class="shot-index">{{ index + 1 }}</span>
-              </button>
+                <Transition name="slide-fade" mode="out-in">
+                  <img :key="slideIndex" class="shot-slide-img" :src="galleryImages[slideIndex]" :alt="selected.project.name + ' 界面截图 ' + (slideIndex + 1)" />
+                </Transition>
+                <button
+                  v-if="galleryImages.length > 1"
+                  class="shot-slide-nav prev"
+                  type="button"
+                  aria-label="上一张图片"
+                  @click.stop="stepSlide(-1)"
+                >‹</button>
+                <button
+                  v-if="galleryImages.length > 1"
+                  class="shot-slide-nav next"
+                  type="button"
+                  aria-label="下一张图片"
+                  @click.stop="stepSlide(1)"
+                >›</button>
+                <span class="shot-slide-counter">{{ slideIndex + 1 }} / {{ galleryImages.length }}</span>
+              </div>
+              <div v-if="galleryImages.length > 1" class="shot-dots">
+                <button
+                  v-for="(src, index) in galleryImages"
+                  :key="src + index"
+                  class="shot-dot"
+                  :class="{ active: index === slideIndex }"
+                  type="button"
+                  :aria-label="'显示第 ' + (index + 1) + ' 张图片'"
+                  @click.stop="setSlide(index)"
+                ></button>
+              </div>
+              <p class="gallery-hint">幻灯片自动播放 · 点击图片可放大查看</p>
             </div>
-            <p class="gallery-hint">点击任意图片放大查看</p>
+            <p v-else class="gallery-hint">暂无项目图片</p>
           </section>
         </div>
       </template>
