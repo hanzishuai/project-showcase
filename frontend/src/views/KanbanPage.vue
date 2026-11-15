@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import {
   KANBAN_TREND,
   KANBAN_WEEKS,
@@ -8,18 +8,21 @@ import {
   type KanbanProject,
   type KanbanVersion
 } from '../kanban/data'
+import { registerAction } from '../agent/bus'
+import { uiState } from '../agent/uiState'
 
 interface VersionView extends KanbanVersion {
   id: string
   project: KanbanProject
   current: boolean
   delivery: string
-  commits: number[]
 }
 
 const kanbanData = loadKanbanData()
 const KANBAN_STAGES = kanbanData.stages
 const KANBAN_PROJECTS = kanbanData.projects
+
+// 数字人已移到全局浮层（components/AgentDock.vue），这里只负责把界面状态同步过去并注册可被调用的动作。
 
 const appEl = ref<HTMLDivElement | null>(null)
 const stageChartEl = ref<HTMLDivElement | null>(null)
@@ -32,6 +35,8 @@ const ownerFilter = ref('')
 const historyOnly = ref(false)
 const selected = ref<VersionView | null>(null)
 const galleryIndex = ref(-1)
+const slideIndex = ref(0)
+let slideshowTimer: number | null = null
 
 let charts: echarts.ECharts[] = []
 
@@ -42,6 +47,8 @@ const compareVersion = (a: string, b: string) => {
   return left[0] - right[0] || left[1] - right[1]
 }
 const addDays = (start: string, days: number) => {
+  // 真实资料未提供日期时以「—」占位，不能拿假日期算交付日
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return '—'
   const date = new Date(start + 'T00:00:00')
   date.setDate(date.getDate() + days)
   return date.toISOString().slice(0, 10)
@@ -54,8 +61,7 @@ const versions: VersionView[] = KANBAN_PROJECTS.flatMap((project, projectIndex) 
     id: projectIndex + '-' + versionIndex,
     project,
     current: version.number === latest,
-    delivery: addDays(version.start, 75),
-    commits: [4 + (projectIndex % 5), 8 + versionIndex * 2, 5 + (projectIndex % 4), 10 + versionIndex + (projectIndex % 3)]
+    delivery: addDays(version.start, 75)
   }))
 })
 
@@ -109,7 +115,18 @@ const drawerHistory = computed(() => {
 })
 const drawerOpen = computed(() => selected.value !== null)
 const galleryOpen = computed(() => galleryIndex.value >= 0 && selected.value !== null)
-const galleryImages = computed(() => selected.value?.project.images ?? [])
+type GalleryItem = { type: 'image' | 'video'; src: string }
+// 图片在前、视频在后，共用一套计数器 / 箭头 / 圆点
+const galleryMedia = computed<GalleryItem[]>(() => {
+  const project = selected.value?.project
+  if (!project) return []
+  return [
+    ...(project.images ?? []).map((src): GalleryItem => ({ type: 'image', src })),
+    ...(project.videos ?? []).map((src): GalleryItem => ({ type: 'video', src }))
+  ]
+})
+const currentMedia = computed(() => galleryMedia.value[slideIndex.value] ?? null)
+const videoCount = computed(() => (selected.value?.project.videos ?? []).length)
 const selectedProjectCurrentVersion = computed(() => {
   const project = selected.value?.project
   if (!project) return null
@@ -117,6 +134,11 @@ const selectedProjectCurrentVersion = computed(() => {
   return project.versions.find((version) => version.number === latest) ?? null
 })
 const isLiveProject = computed(() => selectedProjectCurrentVersion.value?.stage === lastStage)
+// 真实资料未提供累计用户/上线功能数时，不展示两枚「—」空卡，回退到项目简介。
+const hasUsageData = computed(() => {
+  const project = selected.value?.project
+  return !!project && ((project.users ?? 0) > 0 || (project.features ?? 0) > 0)
+})
 const usageMetrics = computed(() => {
   const project = selected.value?.project
   if (!project) return []
@@ -131,20 +153,56 @@ const switchView = (view: 'overview' | 'board') => {
   activeView.value = view
   closeDrawer()
 }
+const stopSlideshow = () => {
+  if (slideshowTimer !== null) {
+    window.clearInterval(slideshowTimer)
+    slideshowTimer = null
+  }
+}
+const startSlideshow = () => {
+  stopSlideshow()
+  const total = galleryMedia.value.length
+  if (!selected.value || total <= 1 || galleryOpen.value) return
+  slideshowTimer = window.setInterval(() => {
+    if (selected.value && !galleryOpen.value) {
+      // 视频项停下自动轮播，避免播放到一半被切走
+      if (galleryMedia.value[slideIndex.value]?.type === 'video') return
+      slideIndex.value = (slideIndex.value + 1) % galleryMedia.value.length
+    }
+  }, 4000)
+}
+const setSlide = (index: number) => {
+  const total = galleryMedia.value.length
+  if (!total) return
+  slideIndex.value = ((index % total) + total) % total
+  startSlideshow()
+}
+const stepSlide = (delta: number) => setSlide(slideIndex.value + delta)
 const openDrawer = (id: string) => {
   const version = versions.find((item) => item.id === id)
-  if (version) { selected.value = version; galleryIndex.value = -1 }
+  if (version) {
+    selected.value = version
+    galleryIndex.value = -1
+    slideIndex.value = 0
+    startSlideshow()
+  }
 }
 const closeDrawer = () => {
+  stopSlideshow()
   selected.value = null
   galleryIndex.value = -1
+  slideIndex.value = 0
 }
 const openGallery = (index: number) => {
-  if (index >= 0 && index < galleryImages.value.length) galleryIndex.value = index
+  stopSlideshow()
+  if (index >= 0 && index < galleryMedia.value.length) galleryIndex.value = index
 }
-const closeGallery = () => { galleryIndex.value = -1 }
+const closeGallery = () => {
+  galleryIndex.value = -1
+  startSlideshow()
+}
 const stepGallery = (delta: number) => {
-  const total = galleryImages.value.length
+  const total = galleryMedia.value.length
   if (!total) return
   galleryIndex.value = (galleryIndex.value + delta + total) % total
 }
@@ -161,6 +219,8 @@ const onKeydown = (event: KeyboardEvent) => {
   }
   if (galleryOpen.value && event.key === 'ArrowLeft') { event.preventDefault(); stepGallery(-1) }
   if (galleryOpen.value && event.key === 'ArrowRight') { event.preventDefault(); stepGallery(1) }
+  if (drawerOpen.value && !galleryOpen.value && event.key === 'ArrowLeft') { event.preventDefault(); stepSlide(-1) }
+  if (drawerOpen.value && !galleryOpen.value && event.key === 'ArrowRight') { event.preventDefault(); stepSlide(1) }
 }
 
 const chartTip = {
@@ -250,18 +310,117 @@ const showOverview = async () => {
 
 watch(activeView, showOverview)
 
+/* ---------------------- Agent：把看板操作暴露给数字人 ---------------------- */
+
+const agentOffs: Array<() => void> = []
+
+const setupAgentActions = () => {
+  agentOffs.push(
+    registerAction('set_board_view', (args) => {
+      const view = String(args.view ?? 'board')
+      if (view !== 'board' && view !== 'overview') return false
+      switchView(view)
+      return true
+    }),
+    registerAction('filter_board', (args) => {
+      if ('project' in args) projectFilter.value = String(args.project ?? '')
+      if ('advisor' in args) ownerFilter.value = String(args.advisor ?? '')
+      if ('show_history' in args) historyOnly.value = Boolean(args.show_history)
+      if (activeView.value !== 'board') switchView('board')
+      const count = filteredVersions.value.length
+      const who = String(args.advisor ?? '').trim()
+      return who ? `已按「${who}」筛出 ${count} 个项目` : `已筛出 ${count} 个项目`
+    }),
+    registerAction('open_project', (args) => {
+      const name = String(args.project ?? '').trim()
+      const version = String(args.version ?? '').trim()
+      if (!name) return false
+      const exact = versions.find((item) => item.project.name === name && (!version || item.number === version))
+      const target =
+        exact ??
+        versions.find((item) => item.project.name.includes(name) || name.includes(item.project.name))
+      if (!target) return false
+      switchView('board')
+      openDrawer(target.id)
+      return `已打开「${target.project.name}」`
+    }),
+    registerAction('close_drawer', () => {
+      closeDrawer()
+      return true
+    }),
+    registerAction('open_gallery', (args) => {
+      const projectName = String(args.project ?? '').trim()
+      if (projectName) {
+        const exact = versions.find((item) => item.project.name === projectName && item.current)
+        const target =
+          exact ??
+          versions.find((item) => item.project.name === projectName) ??
+          versions.find((item) => item.project.name.includes(projectName) || projectName.includes(item.project.name))
+        if (!target) return false
+        switchView('board')
+        openDrawer(target.id)
+      }
+      if (!selected.value) return false
+      const total = selected.value.project.images.length
+      if (!total) return false
+      const index = Math.min(Math.max(Number(args.index ?? 0), 0), total - 1)
+      openGallery(index)
+      return `已打开「${selected.value.project.name}」的项目图片`
+    }),
+    registerAction('step_gallery', (args) => {
+      if (!selected.value || galleryIndex.value < 0) return false
+      stepGallery(Number(args.delta) >= 0 ? 1 : -1)
+      return true
+    }),
+    registerAction('close_gallery', () => {
+      closeGallery()
+      return true
+    })
+  )
+}
+
+// 把看板状态同步给 Agent 作为上下文
+watchEffect(() => {
+  uiState.boardView = activeView.value
+  uiState.projectFilter = projectFilter.value
+  uiState.advisorFilter = ownerFilter.value
+  uiState.showHistory = historyOnly.value
+  uiState.openProject = selected.value?.project.name ?? ''
+  uiState.modalOpen = galleryOpen.value
+  uiState.galleryOpen = galleryOpen.value
+  uiState.galleryIndex = galleryIndex.value
+  uiState.visibleCards = filteredVersions.value.length
+  uiState.boardProjects = KANBAN_PROJECTS.map((project) => {
+    const current = versions.find((item) => item.project.name === project.name && item.current)
+    return {
+      name: project.name,
+      version: current?.number ?? '',
+      stage: current ? KANBAN_STAGES[current.stage]?.name ?? '' : '',
+      advisor: project.owner,
+      stack: project.stack.join('·'),
+      team: project.team,
+      users: project.users,
+      features: project.features
+    }
+  })
+  uiState.projects = projectNames
+})
+
 onMounted(() => {
   fit()
   window.addEventListener('resize', fit)
   document.addEventListener('keydown', onKeydown)
   showOverview()
+  setupAgentActions()
 })
 
 onBeforeUnmount(() => {
+  stopSlideshow()
   window.removeEventListener('resize', fit)
   document.removeEventListener('keydown', onKeydown)
   charts.forEach((chart) => chart.dispose())
   charts = []
+  agentOffs.splice(0).forEach((off) => off())
 })
 </script>
 
@@ -278,6 +437,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="nav-right">
         <a class="nav-action" href="#/edit">数据修改</a>
+        <a class="nav-action" href="#/admin">管理后台</a>
         <nav class="nav-tabs" aria-label="页面视图">
           <button class="tab" :class="{ active: activeView === 'overview' }" type="button" @click="switchView('overview')">数据总览</button>
           <button class="tab" :class="{ active: activeView === 'board' }" type="button" @click="switchView('board')">生命周期看板</button>
@@ -365,6 +525,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="board-main">
+        <!-- 左侧 600px 留白区：数字人已移到全局浮层（AgentDock），这里只保留布局占位 -->
         <div class="pet-stage" aria-hidden="true"></div>
         <div class="lanes">
         <section v-for="(lane, laneIndex) in lanes" :key="lane.name" class="lane">
@@ -427,94 +588,145 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="drawer-body">
-          <section class="section">
-            <h3>生命周期进度</h3>
-            <div class="segments detail-progress" :style="{ '--stage': selectedStage.color }">
-              <span
-                v-for="(stage, index) in KANBAN_STAGES"
-                :key="stage.name"
-                class="segment"
-                :class="{ complete: index < selected.stage, active: index === selected.stage }"
-              ></span>
-            </div>
-            <div class="date-grid">
-              <span v-for="(date, index) in drawerDates" :key="index">{{ date }}</span>
-            </div>
-          </section>
-
-          <section class="section">
-            <h3>版本信息</h3>
-            <div class="info-grid">
-              <div><small>指导老师</small><strong>{{ selected.project.owner }}</strong></div>
-              <div><small>团队成员</small><strong>{{ selected.project.team }}</strong></div>
-              <div><small>技术栈</small><strong>{{ selected.project.stack.join(' / ') }}</strong></div>
-              <div><small>开始日期</small><strong>{{ selected.start }}</strong></div>
-              <div><small>预计交付</small><strong>{{ selected.delivery }}</strong></div>
-            </div>
-          </section>
-
-          <section class="section">
-            <h3>版本历史</h3>
-            <div class="timeline">
-              <div v-for="version in drawerHistory" :key="version.number" class="timeline-item" :class="{ selected: version.selected }">
-                <div class="timeline-head">{{ version.number }}<span>{{ version.start }} · {{ KANBAN_STAGES[version.stage].name }}</span></div>
-                <p>{{ version.note }}</p>
+          <div class="drawer-col">
+            <section class="section">
+              <h3>生命周期进度</h3>
+              <div class="segments detail-progress" :style="{ '--stage': selectedStage.color }">
+                <span
+                  v-for="(stage, index) in KANBAN_STAGES"
+                  :key="stage.name"
+                  class="segment"
+                  :class="{ complete: index < selected.stage, active: index === selected.stage }"
+                ></span>
               </div>
-            </div>
-          </section>
-
-          <section v-if="isLiveProject" class="section">
-            <h3>项目使用情况 <span class="section-count">当前上线版本</span></h3>
-            <div class="usage-stats">
-              <div v-for="metric in usageMetrics" :key="metric.key" class="usage-stat" :style="{ '--accent': metric.accent }">
-                <span class="usage-stat-label">{{ metric.label }}</span>
-                <span class="usage-stat-value"><strong>{{ metric.value.toLocaleString() }}</strong><span>{{ metric.unit }}</span></span>
-                <span class="usage-stat-note">{{ metric.note }}</span>
+              <div class="date-grid">
+                <span v-for="(date, index) in drawerDates" :key="index">{{ date }}</span>
               </div>
-            </div>
-          </section>
-          <section v-else class="section">
-            <h3>近 4 周提交次数</h3>
-            <div class="commit-bars">
-              <div
-                v-for="(count, index) in selected.commits"
-                :key="index"
-                class="commit-bar"
-                :style="{ height: (count / 16 * 100) + '%' }"
-                :data-tip="'第 ' + (index + 1) + ' 周 · ' + count + ' 次提交'"
-              ></div>
-            </div>
-          </section>
+            </section>
 
-          <section class="section">
-            <h3>项目图片<span class="section-count">{{ selected.project.images.length }} 张</span></h3>
-            <div class="shot-gallery">
-              <button
-                v-for="(src, index) in selected.project.images"
-                :key="src + index"
-                class="shot-thumb"
-                type="button"
-                :aria-label="'放大查看 ' + selected.project.name + ' 第 ' + (index + 1) + ' 张图片'"
-                @click="openGallery(index)"
-              >
-                <img :src="src" :alt="selected.project.name + ' 界面截图 ' + (index + 1)" loading="lazy" />
-                <span class="shot-index">{{ index + 1 }}</span>
-              </button>
-            </div>
-            <p class="gallery-hint">点击任意图片放大查看</p>
-          </section>
+            <section class="section">
+              <h3>版本信息</h3>
+              <div class="info-grid">
+                <div><small>指导老师</small><strong>{{ selected.project.owner }}</strong></div>
+                <div><small>团队成员</small><strong>{{ selected.project.team }}</strong></div>
+                <div><small>技术栈</small><strong>{{ selected.project.stack.length ? selected.project.stack.join(' / ') : '—' }}</strong></div>
+                <div><small>开始日期</small><strong>{{ selected.start }}</strong></div>
+                <div><small>预计交付</small><strong>{{ selected.delivery }}</strong></div>
+              </div>
+            </section>
+
+            <section class="section">
+              <h3>版本历史</h3>
+              <div class="timeline">
+                <div v-for="version in drawerHistory" :key="version.number" class="timeline-item" :class="{ selected: version.selected }">
+                  <div class="timeline-head">{{ version.number }}<span>{{ version.start }} · {{ KANBAN_STAGES[version.stage].name }}</span></div>
+                  <p>{{ version.note }}</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="drawer-col">
+            <section v-if="isLiveProject && hasUsageData" class="section">
+              <h3>项目使用情况 <span class="section-count">当前上线版本</span></h3>
+              <div class="usage-stats">
+                <div v-for="metric in usageMetrics" :key="metric.key" class="usage-stat" :style="{ '--accent': metric.accent }">
+                  <span class="usage-stat-label">{{ metric.label }}</span>
+                  <span class="usage-stat-value"><strong>{{ metric.value > 0 ? metric.value.toLocaleString() : '—' }}</strong><span>{{ metric.value > 0 ? metric.unit : '' }}</span></span>
+                  <span class="usage-stat-note">{{ metric.note }}</span>
+                </div>
+              </div>
+            </section>
+            <section v-else class="section">
+              <h3>项目简介</h3>
+              <p class="project-intro">{{ selected.project.intro || '该项目暂未提供文字简介，可在「数据修改」页补充。' }}</p>
+            </section>
+
+            <section class="section">
+              <h3>{{ videoCount ? '项目图片 / 视频' : '项目图片' }}<span class="section-count">{{ galleryMedia.length }} 个<span v-if="videoCount">（含 {{ videoCount }} 个视频）</span></span></h3>
+              <div v-if="galleryMedia.length" class="shot-slideshow">
+                <div
+                  class="shot-slide"
+                  :class="{ 'is-video': currentMedia?.type === 'video' }"
+                  :role="currentMedia?.type === 'video' ? 'group' : 'button'"
+                  :tabindex="currentMedia?.type === 'video' ? -1 : 0"
+                  :aria-label="currentMedia?.type === 'video' ? (selected.project.name + ' 第 ' + (slideIndex + 1) + ' 个视频') : ('放大查看 ' + selected.project.name + ' 第 ' + (slideIndex + 1) + ' 张图片')"
+                  @click="currentMedia?.type === 'video' ? undefined : openGallery(slideIndex)"
+                  @keydown.enter="currentMedia?.type === 'video' ? undefined : openGallery(slideIndex)"
+                >
+                  <Transition name="slide-fade" mode="out-in">
+                    <video
+                      v-if="currentMedia?.type === 'video'"
+                      :key="'vid-' + slideIndex"
+                      class="shot-slide-img shot-slide-video"
+                      :src="currentMedia.src"
+                      controls
+                      playsinline
+                      preload="metadata"
+                      @click.stop
+                    ></video>
+                    <img v-else :key="'img-' + slideIndex" class="shot-slide-img" :src="currentMedia?.src" :alt="selected.project.name + ' 界面截图 ' + (slideIndex + 1)" />
+                  </Transition>
+                  <button
+                    v-if="currentMedia?.type === 'video'"
+                    class="shot-slide-zoom"
+                    type="button"
+                    @click.stop="openGallery(slideIndex)"
+                  >放大播放</button>
+                  <button
+                    v-if="galleryMedia.length > 1"
+                    class="shot-slide-nav prev"
+                    type="button"
+                    aria-label="上一项"
+                    @click.stop="stepSlide(-1)"
+                  >‹</button>
+                  <button
+                    v-if="galleryMedia.length > 1"
+                    class="shot-slide-nav next"
+                    type="button"
+                    aria-label="下一项"
+                    @click.stop="stepSlide(1)"
+                  >›</button>
+                  <span class="shot-slide-counter">{{ slideIndex + 1 }} / {{ galleryMedia.length }}</span>
+                </div>
+                <div v-if="galleryMedia.length > 1" class="shot-dots">
+                  <button
+                    v-for="(item, index) in galleryMedia"
+                    :key="item.src + index"
+                    class="shot-dot"
+                    :class="{ active: index === slideIndex, video: item.type === 'video' }"
+                    type="button"
+                    :aria-label="item.type === 'video' ? ('显示第 ' + (index + 1) + ' 个视频') : ('显示第 ' + (index + 1) + ' 张图片')"
+                    @click.stop="setSlide(index)"
+                  ></button>
+                </div>
+                <p class="gallery-hint">图片每 4 秒自动切换 · 视频停留不自动切走 · 点击图片可放大查看</p>
+              </div>
+              <p v-else class="gallery-hint">暂无项目图片或视频</p>
+            </section>
+          </div>
         </div>
       </template>
     </aside>
 
     <div v-if="galleryOpen && selected" class="lightbox" @click.self="closeGallery">
-      <button class="lightbox-close" type="button" aria-label="关闭图片" @click="closeGallery">×</button>
+      <button class="lightbox-close" type="button" aria-label="关闭" @click="closeGallery">×</button>
       <div class="lightbox-stage">
-        <button class="lightbox-nav prev" type="button" aria-label="上一张" @click.stop="stepGallery(-1)">‹</button>
-        <img class="lightbox-img" :src="selected.project.images[galleryIndex]" :alt="selected.project.name + ' 界面截图 ' + (galleryIndex + 1)" />
-        <button class="lightbox-nav next" type="button" aria-label="下一张" @click.stop="stepGallery(1)">›</button>
+        <button class="lightbox-nav prev" type="button" aria-label="上一项" @click.stop="stepGallery(-1)">‹</button>
+        <video
+          v-if="galleryMedia[galleryIndex]?.type === 'video'"
+          :key="'lv-' + galleryIndex"
+          class="lightbox-video"
+          :src="galleryMedia[galleryIndex].src"
+          controls
+          playsinline
+          preload="metadata"
+          @click.stop
+        ></video>
+        <img v-else class="lightbox-img" :src="galleryMedia[galleryIndex]?.src" :alt="selected.project.name + ' 界面截图 ' + (galleryIndex + 1)" />
+        <button class="lightbox-nav next" type="button" aria-label="下一项" @click.stop="stepGallery(1)">›</button>
       </div>
-      <div class="lightbox-caption">{{ selected.project.name }} · 项目图片 {{ galleryIndex + 1 }} / {{ selected.project.images.length }}</div>
+      <div class="lightbox-caption">{{ selected.project.name }} · {{ galleryMedia[galleryIndex]?.type === 'video' ? '项目视频' : '项目图片' }} {{ galleryIndex + 1 }} / {{ galleryMedia.length }}</div>
     </div>
 
   </div>

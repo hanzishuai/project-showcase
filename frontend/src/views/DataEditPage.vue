@@ -11,12 +11,15 @@ import {
 
 interface EditorProject {
   name: string
+  intro: string
   owner: string
   team: string
   users: number
   features: number
   stackText: string
   images: string[]
+  videos: string[]
+  videoUrlDraft: string
   versions: KanbanVersion[]
 }
 
@@ -35,12 +38,15 @@ const load = () => {
   stages.value = data.stages.map((stage) => ({ ...stage }))
   projects.value = data.projects.map((project) => ({
     name: project.name,
+    intro: project.intro ?? '',
     owner: project.owner,
     team: project.team,
     users: project.users,
     features: project.features,
     stackText: (project.stack || []).join(', '),
     images: [...(project.images || [])],
+    videos: [...(project.videos || [])],
+    videoUrlDraft: '',
     versions: (project.versions || []).map((version) => ({ ...version }))
   }))
 }
@@ -63,12 +69,15 @@ onBeforeUnmount(() => window.removeEventListener('resize', fit))
 const addProject = () => {
   projects.value.push({
     name: '新项目',
+    intro: '',
     owner: '待补充',
     team: '待补充',
     users: 0,
     features: 0,
     stackText: 'Vue 3, Spring Boot, MySQL',
     images: [],
+    videos: [],
+    videoUrlDraft: '',
     versions: []
   })
 }
@@ -156,6 +165,63 @@ const removeImage = (project: EditorProject, index: number) => {
   project.images.splice(index, 1)
 }
 
+const MAX_VIDEO_BYTES = 2 * 1024 * 1024
+const VIDEO_ACCEPT = '.mp4,.webm,.ogv,.ogg,.m4v,.mov,video/*'
+
+const isVideoFile = (file: File) => {
+  if (file.type.startsWith('video/')) return true
+  return /\.(mp4|webm|ogv|ogg|m4v|mov)$/i.test(file.name)
+}
+
+const videoToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  if (!isVideoFile(file)) {
+    reject(new Error(file.name + ' 不是视频文件'))
+    return
+  }
+  if (file.size > MAX_VIDEO_BYTES) {
+    reject(new Error(file.name + ' 超过 2 MB，请改用下方「视频地址」填 /media/视频名.mp4 或 https 外链'))
+    return
+  }
+  const reader = new FileReader()
+  reader.onerror = () => reject(new Error(file.name + ' 读取失败'))
+  reader.onload = () => resolve(String(reader.result))
+  reader.readAsDataURL(file)
+})
+
+const uploadVideos = async (project: EditorProject, event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = filesFromEvent(event)
+  if (input instanceof HTMLInputElement) input.value = ''
+  if (!files.length) return
+  try {
+    const uploaded: string[] = []
+    for (const file of files) uploaded.push(await videoToDataUrl(file))
+    project.videos.push(...uploaded)
+    messageType.value = 'info'
+    message.value = '已添加 ' + uploaded.length + ' 个视频（内嵌），点击保存后写入看板'
+  } catch (error) {
+    messageType.value = 'error'
+    message.value = String(error instanceof Error ? error.message : error)
+  }
+}
+
+const addVideoUrl = (project: EditorProject) => {
+  const url = project.videoUrlDraft.trim()
+  if (!url) {
+    messageType.value = 'error'
+    message.value = '请先填写视频地址'
+    return
+  }
+  project.videos.push(url)
+  project.videoUrlDraft = ''
+  messageType.value = 'info'
+  message.value = '已添加视频地址，点击保存后写入看板'
+}
+
+const removeVideo = (project: EditorProject, index: number) => {
+  project.videos.splice(index, 1)
+}
+
 const validate = (): string[] => {
   const errors: string[] = []
   if (!stages.value.length) errors.push('至少保留一个阶段')
@@ -174,7 +240,9 @@ const validate = (): string[] => {
         errors.push(versionLabel + '：阶段不合法')
       }
       if (!Number.isFinite(Number(version.days)) || Number(version.days) < 0) errors.push(versionLabel + '：停留天数需为非负数字')
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(version.start)) errors.push(versionLabel + '：开始日期格式应为 YYYY-MM-DD')
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(version.start) && version.start.trim() !== '—') {
+        errors.push(versionLabel + '：开始日期格式应为 YYYY-MM-DD，资料未提供时填「—」')
+      }
     })
   })
   return errors
@@ -194,12 +262,14 @@ const save = () => {
     })),
     projects: projects.value.map((project) => ({
       name: project.name.trim(),
+      intro: project.intro.trim(),
       owner: project.owner.trim(),
       team: project.team.trim(),
       users: Number(project.users) || 0,
       features: Number(project.features) || 0,
       stack: splitStack(project.stackText),
       images: project.images.filter(Boolean),
+      videos: project.videos.map((item) => item.trim()).filter(Boolean),
       versions: project.versions.map((version) => ({
         number: version.number.trim(),
         stage: Number(version.stage),
@@ -208,6 +278,12 @@ const save = () => {
         note: version.note.trim()
       }))
     }))
+  }
+  const serialized = JSON.stringify(payload)
+  if (serialized.length > 2_400_000) {
+    messageType.value = 'error'
+    message.value = '保存内容约 ' + (serialized.length / 1024 / 1024).toFixed(1) + ' MB，超出浏览器本地存储上限；请删减项目图片，或把大视频改成 /media 地址（不要内嵌）后再保存。'
+    return
   }
   try {
     saveKanbanData(payload)
@@ -293,6 +369,7 @@ const restoreDefaults = () => {
             <label><span>用户数量</span><input v-model.number="project.users" type="number" min="0" /></label>
             <label><span>已开发功能</span><input v-model.number="project.features" type="number" min="0" /></label>
             <label class="wide"><span>技术栈（逗号分隔）</span><input v-model="project.stackText" /></label>
+            <label class="intro-field"><span>项目简介（显示在详情抽屉右栏）</span><textarea v-model="project.intro" rows="4" placeholder="用一两段话介绍项目背景、面向对象、主要功能与当前进展；资料未提供的字段请填「—」"></textarea></label>
             <div class="image-field wide">
               <div class="image-field-head">
                 <span>项目图片 <em v-if="project.images.length">{{ project.images.length }} 张</em></span>
@@ -310,7 +387,31 @@ const restoreDefaults = () => {
                 </div>
                 <div v-else class="image-empty">还没有项目图片，点击上方「上传图片」或把图片拖进来</div>
               </div>
-              <p class="image-hint">支持多选，单张不超过 12 MB，上传后自动压缩为最长边 1400px。</p>
+              <p class="image-hint">支持多选，单张不超过 12 MB，上传后自动压缩为最长边 1400px；图片存在浏览器本地，建议总量不超过 10 张。</p>
+            </div>
+            <div class="image-field wide">
+              <div class="image-field-head">
+                <span>项目视频 <em v-if="project.videos.length">{{ project.videos.length }} 个</em></span>
+                <label class="image-upload-btn">
+                  上传视频
+                  <input type="file" :accept="VIDEO_ACCEPT" multiple @change="uploadVideos(project, $event)" />
+                </label>
+              </div>
+              <div class="video-url-row">
+                <input v-model="project.videoUrlDraft" placeholder="或填视频地址：/media/演示.mp4 或 https://… 外链" @keydown.enter.prevent="addVideoUrl(project)" />
+                <button class="video-add-btn" type="button" @click="addVideoUrl(project)">添加地址</button>
+              </div>
+              <div class="image-drop" @dragover.prevent @drop.prevent="uploadVideos(project, $event)">
+                <div v-if="project.videos.length" class="image-grid">
+                  <div v-for="(src, videoIndex) in project.videos" :key="videoIndex" class="image-item video-item">
+                    <video :src="src" preload="metadata" muted playsinline></video>
+                    <span class="video-badge">{{ src.startsWith('data:') ? '内嵌' : '地址' }}</span>
+                    <button class="image-remove" type="button" :aria-label="'删除第 ' + (videoIndex + 1) + ' 个视频'" @click="removeVideo(project, videoIndex)">×</button>
+                  </div>
+                </div>
+                <div v-else class="image-empty">还没有项目视频，可上传 ≤2 MB 的小视频内嵌，或把大视频放进 assets/images 后填 /media/文件名.mp4</div>
+              </div>
+              <p class="image-hint">内嵌视频单个不超过 2 MB（转成 base64 会变大，尽量只放短视频）；大视频请用地址方式。图片 + 视频总量受浏览器本地存储约 2.4 MB 限制。</p>
             </div>
           </div>
 
@@ -326,7 +427,7 @@ const restoreDefaults = () => {
                   <option v-for="(stage, stageIndex) in stages" :key="stageIndex" :value="stageIndex">{{ stage.name || '阶段 ' + (stageIndex + 1) }}</option>
                 </select>
                 <input v-model.number="version.days" type="number" min="0" />
-                <input v-model="version.start" type="date" />
+                <input v-model="version.start" type="text" placeholder="YYYY-MM-DD 或 —" />
                 <input v-model="version.note" placeholder="版本说明" />
                 <button class="link-danger" type="button" @click="removeVersion(project, versionIndex)">删除</button>
               </div>

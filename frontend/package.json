@@ -6,12 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:agent": "node ../scripts/agent-selftest.mjs",
+    "test:agent:ui": "node ../scripts/agent-ui-selftest.mjs",
+    "test:agent:voice": "node ../scripts/agent-voice-selftest.mjs",
+    "test:agent:tts": "node ../scripts/tts-segment-selftest.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "echarts": "^5.5.1",
     "vue": "^3.5.13",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "@arco-design/web-vue": "^2.56.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",

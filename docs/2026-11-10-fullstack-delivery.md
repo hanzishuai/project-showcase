@@ -292,3 +292,16 @@
 - 验收：`npm run build` 571 modules 退出 0（dist CSS 19.49 kB、JS 1,140.84 kB）；浏览器快照确认看板顶部统计为 19 / 12 / 7，9 张版本卡均显示「开发成员 · …」，无「超期风险」「已停留」文案。
 - 截图：`previews/2026-11-11-kanban-no-risk-developers.png`（1920×1080，202,828 B）。
 - 生效方式：刷新 `http://127.0.0.1:8000` 即可，无需重启后端。
+
+## 24. 2026-11-14 追加：项目图片改为自动播放幻灯片
+
+按机主截图批注「改成幻灯片的形式，自动播放，一次显示一张，图片要展示的大一点」执行；同时从 GitHub `main` 最新提交 `c3632b7` 同步远程版本后再修改。
+
+- 同步：远程 `main` tree 与本地旧版本不同，远程新增 64 个文件（管理后台、数字人 Agent、RAG 等），已将本地工作区覆盖为远程版本。
+- 模板：`frontend/src/views/KanbanPage.vue` 的 `.shot-gallery` / `.shot-thumb` 改为 `.shot-slideshow` / `.shot-slide`；一次只渲染一张 `.shot-slide-img`，保留左右箭头、页码和圆点。
+- 交互：新增 `slideIndex` 与 4 秒自动播放定时器；打开抽屉从第 1 张开始，手动切换/圆点点击会重置计时，打开灯箱时暂停，关闭灯箱或抽屉时清理定时器；保留原灯箱点击放大能力。
+- 样式：`frontend/src/kanban.css` 新增 `.shot-slideshow`、`.shot-slide`（16:9 大图）、`.shot-slide-nav`、`.shot-slide-counter`、`.shot-dot` 与淡入过渡；图片宽度撑满抽屉内容区，明显大于原 2×2 缩略图。
+- 验收：`npm run build` 1244 modules 退出 0（dist CSS 460.96 kB、JS 2,162.92 kB）；Vite + Chrome CDP 实测详情抽屉 `drawer=true`、`slides=1`、`dots=4`、`oldThumbs=0`；等待 4.5 秒后计数由 `1 / 4` 变为 `2 / 4`，自动播放生效。
+- 截图：`previews/2026-11-14-slideshow-detail.png`（1898×982，303,965 B）。
+- 生效方式：重新构建前端后刷新页面；无需重启后端。
+
