@@ -61,7 +61,8 @@ const versions: VersionView[] = KANBAN_PROJECTS.flatMap((project, projectIndex) 
     id: projectIndex + '-' + versionIndex,
     project,
     current: version.number === latest,
-    delivery: addDays(version.start, 75)
+    // 交付日期只认数据修改页里填的真实值；旧存档没填就显示「—」，不再按开始日期 +75 天凭空推算
+    delivery: version.delivery?.trim() || '—'
   }))
 })
 
@@ -611,7 +612,7 @@ onBeforeUnmount(() => {
                 <div><small>团队成员</small><strong>{{ selected.project.team }}</strong></div>
                 <div><small>技术栈</small><strong>{{ selected.project.stack.length ? selected.project.stack.join(' / ') : '—' }}</strong></div>
                 <div><small>开始日期</small><strong>{{ selected.start }}</strong></div>
-                <div><small>预计交付</small><strong>{{ selected.delivery }}</strong></div>
+                <div><small>{{ isLiveProject ? '交付时间' : '预计交付' }}</small><strong>{{ selected.delivery }}</strong></div>
               </div>
             </section>
 
@@ -700,7 +701,7 @@ onBeforeUnmount(() => {
                     @click.stop="setSlide(index)"
                   ></button>
                 </div>
-                <p class="gallery-hint">图片每 4 秒自动切换 · 视频停留不自动切走 · 点击图片可放大查看</p>
+                <p class="gallery-hint">点击图片可放大查看</p>
               </div>
               <p v-else class="gallery-hint">暂无项目图片或视频</p>
             </section>

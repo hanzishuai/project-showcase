@@ -97,7 +97,7 @@
 .versions-editor{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
 .versions-title{font-size:12px;color:var(--muted);margin-bottom:8px}
 .versions-title span{color:var(--weak)}
-.version-head,.version-row{display:grid;grid-template-columns:90px minmax(0,1fr) 100px 145px minmax(0,2fr) 52px;gap:8px;align-items:center}
+.version-head,.version-row{display:grid;grid-template-columns:90px minmax(0,1fr) 100px 130px 145px minmax(0,1.6fr) 52px;gap:8px;align-items:center}
 .version-head{font-size:11px;color:var(--weak);padding:0 2px 6px}
 .version-row{margin-bottom:8px}
 .version-row .link-danger{margin-left:0;justify-self:start}

@@ -8,6 +8,9 @@ export interface KanbanVersion {
   stage: number
   days: number
   start: string
+  // 交付日期（YYYY-MM-DD）。已上线项目在详情抽屉显示为「交付时间」，其余显示「预计交付」。
+  // 可选字段：兼容旧 localStorage 存档，资料未提供时留空显示「—」，不再按开始日期自动推算。
+  delivery?: string
   note: string
 }
 

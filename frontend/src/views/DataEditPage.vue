@@ -47,7 +47,7 @@ const load = () => {
     images: [...(project.images || [])],
     videos: [...(project.videos || [])],
     videoUrlDraft: '',
-    versions: (project.versions || []).map((version) => ({ ...version }))
+    versions: (project.versions || []).map((version) => ({ ...version, delivery: version.delivery ?? '' }))
   }))
 }
 
@@ -92,6 +92,7 @@ const addVersion = (project: EditorProject) => {
     stage: 0,
     days: 0,
     start: new Date().toISOString().slice(0, 10),
+    delivery: '',
     note: ''
   })
 }
@@ -243,6 +244,10 @@ const validate = (): string[] => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(version.start) && version.start.trim() !== '—') {
         errors.push(versionLabel + '：开始日期格式应为 YYYY-MM-DD，资料未提供时填「—」')
       }
+      const delivery = (version.delivery ?? '').trim()
+      if (delivery && delivery !== '—' && !/^\d{4}-\d{2}-\d{2}$/.test(delivery)) {
+        errors.push(versionLabel + '：交付日期格式应为 YYYY-MM-DD，资料未提供时可留空或填「—」')
+      }
     })
   })
   return errors
@@ -275,6 +280,7 @@ const save = () => {
         stage: Number(version.stage),
         days: Number(version.days) || 0,
         start: version.start,
+        delivery: (version.delivery ?? '').trim(),
         note: version.note.trim()
       }))
     }))
@@ -419,7 +425,7 @@ const restoreDefaults = () => {
             <div class="versions-title">版本列表 <span>{{ project.versions.length }} 个</span></div>
             <div v-if="project.versions.length" class="version-table">
               <div class="version-head">
-                <span>版本号</span><span>阶段</span><span>已停留天数</span><span>开始日期</span><span>版本说明</span><span>操作</span>
+                <span>版本号</span><span>阶段</span><span>已停留天数</span><span>开始日期</span><span>预计交付 / 交付时间</span><span>版本说明</span><span>操作</span>
               </div>
               <div v-for="(version, versionIndex) in project.versions" :key="versionIndex" class="version-row">
                 <input v-model="version.number" placeholder="v1.0" />
@@ -428,6 +434,7 @@ const restoreDefaults = () => {
                 </select>
                 <input v-model.number="version.days" type="number" min="0" />
                 <input v-model="version.start" type="text" placeholder="YYYY-MM-DD 或 —" />
+                <input v-model="version.delivery" type="text" placeholder="YYYY-MM-DD，留空显示「—」" />
                 <input v-model="version.note" placeholder="版本说明" />
                 <button class="link-danger" type="button" @click="removeVersion(project, versionIndex)">删除</button>
               </div>
