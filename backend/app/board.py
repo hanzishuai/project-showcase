@@ -48,3 +48,51 @@ def put_board(payload: BoardWrite):
             raise HTTPException(409, "看板已被更新，请刷新后重试")
         db.commit()
         return {"revision": payload.revision + 1}
+
+
+class BoardChange(BaseModel):
+    revision: int = Field(ge=0)
+    project: str = Field(min_length=1, max_length=200)
+    kind: str
+    intro: str | None = Field(default=None, max_length=10000)
+    version: dict | None = None
+
+
+def prepare_change(data: dict, change: BoardChange) -> dict:
+    import copy
+    data = copy.deepcopy(data)
+    matches = [p for p in data.get("projects", []) if p.get("name") == change.project]
+    if len(matches) != 1:
+        raise HTTPException(400, "项目不存在或名称不唯一")
+    project = matches[0]
+    if change.kind == "intro":
+        if change.intro is None or not change.intro.strip():
+            raise HTTPException(400, "项目简介不能为空")
+        before = project.get("intro") or ""
+        after = change.intro.strip()
+        project["intro"] = after
+        return {"data": data, "label": "修改项目简介", "before": before, "after": after}
+    if change.kind == "add_version":
+        v = change.version or {}
+        number = str(v.get("number") or "").strip()
+        stage = v.get("stage")
+        if not number or len(number) > 40:
+            raise HTTPException(400, "版本号不能为空")
+        if any(x.get("number") == number for x in project.get("versions", [])):
+            raise HTTPException(409, "版本号已存在")
+        if isinstance(stage, bool) or not isinstance(stage, int) or not 0 <= stage < len(data["stages"]):
+            raise HTTPException(400, "版本阶段无效")
+        version = {"number": number, "stage": stage, "days": 0, "start": str(v.get("start") or "—")[:40], "delivery": str(v.get("delivery") or "")[:40], "note": str(v.get("note") or "")[:2000]}
+        project.setdefault("versions", []).append(version)
+        return {"data": data, "label": "新增项目版本", "before": "无", "after": {**version, "stage_name": data["stages"][stage].get("name", "")}}
+    raise HTTPException(400, "不支持的修改类型")
+
+
+@router.post("/change")
+def apply_board_change(change: BoardChange):
+    data, revision = read_board()
+    if revision != change.revision:
+        raise HTTPException(409, "数据已变化，请重新发起修改")
+    prepared = prepare_change(data, change)
+    result = put_board(BoardWrite(data=prepared["data"], revision=revision))
+    return {"ok": True, **result, "message": prepared["label"] + "成功"}

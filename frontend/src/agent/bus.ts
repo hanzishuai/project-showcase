@@ -1,95 +1,42 @@
-/**
- * Agent 动作总线：后端返回的 action 事件在这里分发给页面注册的处理函数。
- *
- * 页面在 onMounted 注册、onBeforeUnmount 注销；没有处理函数的动作会短暂排队重试，
- * 以便「先导航、再操作」这类连续动作在目标页面挂载后仍能执行。
- */
+/** 执行页面动作并返回可用于模型的实际结果。 */
+import { nextTick } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { snapshotUiState } from './uiState'
 
-export interface AgentAction {
-  tool: string
-  args: Record<string, unknown>
-}
-
-/** 动作失败时交给数字人亲口说（由 AgentDock 注册） */
-let failureHandler: ((text: string) => void) | null = null
-
-export function setActionFailureHandler(handler: ((text: string) => void) | null): void {
-  failureHandler = handler
-}
-
-/** 动作执行失败时给用户的一句人话 */
-const FAILURE_TEXT: Record<string, string> = {
-  open_project: '没找到这个项目，看看名字对不对？',
-  open_gallery: '先打开一个项目的详情，才能看图。',
-  filter_board: '这个筛选条件没设上。',
-}
-
-type Handler = (args: Record<string, unknown>) => boolean | string | void
-
+export interface AgentAction { tool: string; args: Record<string, unknown>; action_id?: string }
+export interface ActionOutcome { ok: boolean; message: string; ui: Record<string, unknown> }
+type Handler = (args: Record<string, unknown>) => boolean | string | void | Promise<boolean | string | void>
 const handlers = new Map<string, Handler>()
-const pending: AgentAction[] = []
-let retryTimer: ReturnType<typeof setTimeout> | null = null
-
+let failureHandler: ((text: string) => void) | null = null
+export function setActionFailureHandler(handler: ((text: string) => void) | null): void { failureHandler = handler }
 export function registerAction(tool: string, handler: Handler): () => void {
   handlers.set(tool, handler)
-  return () => {
-    if (handlers.get(tool) === handler) handlers.delete(tool)
-  }
+  return () => { if (handlers.get(tool) === handler) handlers.delete(tool) }
 }
-
-function run(action: AgentAction): boolean {
-  const handler = handlers.get(action.tool)
-  if (!handler) return false
-  try {
-    const result = handler(action.args ?? {})
-    if (typeof result === 'string' && result) {
-      Message.success({ content: result, duration: 2200 })
-    } else if (result === false) {
-      const text = FAILURE_TEXT[action.tool] ?? '这个操作没完成'
-      // 优先让数字人说出来，其次才用 toast
-      if (failureHandler) failureHandler(text)
-      else Message.warning(text)
-    }
-    return true
-  } catch (error) {
-    console.warn('[agent] action failed', action.tool, error)
-    Message.error('操作执行失败')
-    return true
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+export async function dispatchAction(action: AgentAction, signal?: AbortSignal): Promise<ActionOutcome> {
+  let handler = handlers.get(action.tool)
+  const deadline = Date.now() + 3000
+  while (!handler && Date.now() < deadline && !signal?.aborted) {
+    await delay(100)
+    handler = handlers.get(action.tool)
   }
+  let ok = false
+  let message = ''
+  if (signal?.aborted) message = '操作已中断'
+  else if (!handler) message = '当前页面没有可用的操作处理器'
+  else {
+    try {
+      const result = await handler(action.args ?? {})
+      ok = result !== false
+      message = typeof result === 'string' && result ? result : ok ? '操作完成' : '操作未完成，请检查当前页面和参数'
+    } catch (error) { message = error instanceof Error ? error.message : '操作执行失败' }
+  }
+  if (!ok && !signal?.aborted) {
+    if (failureHandler) failureHandler(message)
+    else Message.warning(message)
+  }
+  await nextTick()
+  return { ok, message, ui: snapshotUiState() }
 }
-
-function flushPending(): void {
-  retryTimer = null
-  const rest: AgentAction[] = []
-  for (const action of pending.splice(0)) {
-    if (!run(action)) rest.push(action)
-  }
-  pending.push(...rest)
-  if (pending.length > 0) {
-    retryTimer = setTimeout(flushPending, 150)
-  }
-}
-
-// 方便调试/自测：在浏览器控制台直接派发动作
-if (typeof window !== 'undefined') {
-  ;(window as unknown as Record<string, unknown>).__agentDispatchAction = dispatchAction
-}
-
-let waited = 0
-export function dispatchAction(action: AgentAction): void {
-  if (!action || !action.tool) return
-  if (run(action)) return
-  if (waited === 0) waited = Date.now()
-  pending.push(action)
-  if (pending.length > 0 && retryTimer === null) {
-    retryTimer = setTimeout(() => {
-      flushPending()
-    }, 120)
-  }
-  // 超过 3 秒还找不到处理函数就丢弃，避免无限排队
-  if (Date.now() - waited > 3000) {
-    pending.length = 0
-    waited = 0
-  }
-}
+if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__agentDispatchAction = dispatchAction

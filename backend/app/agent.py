@@ -12,15 +12,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .board import read_board
+from .board import read_board, prepare_change, BoardChange
 from pp7rag.config import settings
 from pp7rag.engine.prompts import format_references
 from pp7rag.ragapi import qa_log, retrieval
@@ -189,28 +190,60 @@ TOOLS = [
 ]
 
 ACTION_TOOLS = {item["function"]["name"] for item in TOOLS}
-TOOLS.append({"type": "function", "function": {"name": "query_board", "description": "查询服务器上的最新看板项目资料。需要回答项目、版本、简介、进度或比较时使用；不传 project 获取所有项目的摘要，传项目名获取该项目完整文字资料。", "parameters": {"type": "object", "properties": {"project": {"type": "string", "description": "项目名称，不传表示列出全部项目摘要"}}}}})
+TOOLS.append({"type": "function", "function": {"name": "query_board", "description": "查询服务器上的最新看板项目资料。需要回答项目、版本、简介、进度或比较时使用；不传 project 获取所有项目的摘要，传项目名获取该项目完整文字资料。", "parameters": {"type": "object", "properties": {"project": {"type": "string", "description": "项目名称"}, "advisor": {"type": "string", "description": "指导老师姓名"}, "stage": {"type": "string", "description": "当前版本阶段名称"}, "projects": {"type": "array", "items": {"type": "string"}, "description": "需要比较的项目名称"}}}}})
+TOOLS.append({"type": "function", "function": {"name": "propose_board_change", "description": "用户明确要求修改项目简介或新增版本时，准备修改预览并请求用户确认。不得将提议当成已保存。", "parameters": {"type": "object", "properties": {"project": {"type": "string", "description": "完整项目名称"}, "kind": {"type": "string", "enum": ["intro", "add_version"]}, "intro": {"type": "string"}, "version": {"type": "object", "properties": {"number": {"type": "string"}, "stage": {"type": "integer", "description": "阶段从0开始的索引"}, "start": {"type": "string"}, "delivery": {"type": "string"}, "note": {"type": "string"}}}}, "required": ["project", "kind"]}}})
 ALLOWED_TOOLS = ACTION_TOOLS
+_pending_action_results: dict[str, asyncio.Future] = {}
 
-def _query_board(project: str = "") -> str:
+class ActionResult(BaseModel):
+    action_id: str = Field(min_length=32, max_length=64)
+    ok: bool
+    message: str = Field(default="", max_length=1000)
+    ui: dict | None = None
+
+@router.post("/action-result")
+async def action_result(result: ActionResult):
+    future = _pending_action_results.get(result.action_id)
+    if not future or future.done():
+        raise HTTPException(404, "操作已结束或不存在")
+    future.set_result({"ok": result.ok, "message": result.message, "ui": result.ui})
+    return {"ok": True}
+
+
+def _query_board(project: str = "", advisor: str = "", stage: str = "", projects: list[str] | None = None) -> str:
     data, _ = read_board()
     stages = data.get("stages", [])
-    projects = data.get("projects", [])
+    board_projects = data.get("projects", [])
     result = []
-    for item in projects:
+    for item in board_projects:
         name = str(item.get("name", ""))
         if project and project.casefold() not in name.casefold():
+            continue
+        if projects and not any(str(p).casefold() in name.casefold() for p in projects):
+            continue
+        if advisor and advisor.casefold() not in str(item.get("owner") or "").casefold():
             continue
         versions = []
         for v in item.get("versions", []):
             stage_index = v.get("stage", -1)
-            stage = stages[stage_index].get("name", "未知") if isinstance(stage_index, int) and 0 <= stage_index < len(stages) else "未知"
-            versions.append({**v, "stage_name": stage})
+            stage_name = stages[stage_index].get("name", "未知") if isinstance(stage_index, int) and 0 <= stage_index < len(stages) else "未知"
+            versions.append({**v, "stage_name": stage_name})
+        def version_key(v):
+            return tuple(int(part) for part in re.findall(r"\d+", str(v.get("number", ""))))
+        current = max(versions, key=version_key, default=None)
+        if stage and (not current or stage.casefold() not in current["stage_name"].casefold()):
+            continue
         entry = {"name": name, "owner": item.get("owner"), "team": item.get("team"), "stack": item.get("stack"), "versions": versions}
-        if project:
+        if project or projects:
             entry.update({"intro": item.get("intro"), "users": item.get("users"), "features": item.get("features"), "image_count": len(item.get("images") or []), "video_count": len(item.get("videos") or [])})
         result.append(entry)
-    return json.dumps({"projects": result, "total": len(result)}, ensure_ascii=False)
+    counts = {}
+    for item in result:
+        current = max(item["versions"], key=lambda v: tuple(int(p) for p in re.findall(r"\d+", str(v.get("number", "")))), default=None)
+        if current:
+            name = current["stage_name"]
+            counts[name] = counts.get(name, 0) + 1
+    return json.dumps({"projects": result, "total": len(result), "current_stage_counts": counts}, ensure_ascii=False)
 
 
 # 复用连接：每轮新建客户端会让每次提问都重做 DNS/TLS 握手（约 200-400ms）
@@ -244,21 +277,21 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
 2. 用户问项目资料、进度或对比时，先调用 query_board 查询服务器实时数据；指定项目时传项目名查完整资料。页面操作说明以系统地图为准，知识文档作为补充。查询不会操作界面。
 3. 一次最多调用 {max_actions} 个动作；能用一个动作解决就别拆成多个；
    但用户明确要求两个步骤（「先回到看板，再打开某某的详情」）时，必须按顺序都调用，不能省略。
-4. 说完话再动作用一句话衔接，例如「这就打开给你看」。不要描述技术细节，不要说「调用工具」。
+4. 不要描述技术细节；动作执行后，根据工具实际返回结果回答。
    用户只是询问信息（某个项目在哪一列、什么阶段、谁指导、用什么技术栈、团队是谁、总共几个）时，
    直接用「当前界面」里的看板/后台数据回答，不要为了回答而打开详情或切换页面；
    只有用户明确说「打开 / 看看 / 切到 / 跳到」时才调用动作。
    用户指名后台的某个页签（工作概览/对话记录/知识库管理）时，只用 open_admin_tab，不要再叠加 navigate_page(admin)。
    用户提到要改音色、模型、密钥、检索参数、助手名字等设置类内容时，调用 open_admin_tab(settings) 带路，不要只回答「可以改」。
-5. **调用动作时也必须说话**：每次调用动作都要配至少一句话（说明做了什么），不要只返回动作、正文留空。
+5. 动作完成后再向用户说明结果；执行失败时不得声称已完成。
 6. 一句话里既有动作又有问题时（「打开后台，顺便告我几个会话」「打开实验室预约系统，再说说技术栈」），
    动作照做，同时把那半句问题也答了。
    例：问「打开后台，顺便告诉我有多少会话」→ 动作 open_admin_tab(dashboard)，话术「这就打开后台，目前累计【N】个会话」。
    例：问「打开实验室预约系统，说说技术栈」→ 动作 open_project(实验室预约系统)，话术「这就打开，它用的是【技术栈】」。
+操作结果以工具返回的 ok 和 message 为准，失败或等待确认时不得说成功。
 7. **说到就要做到**：话了里说「这就打开/切到/关掉」，就必须真的调用对应动作；
    如果这次不想或不能操作，就不要说已经做了，改成询问或说明。
-8. 你只负责介绍和带路，不替用户执行任何写操作（保存、删除、上传文档、重建索引、修改数据）。
-   用户要求这类操作时，告诉他去哪个页面的哪个按钮自己做，不要调用动作、也不要假装已经做了。
+8. 项目简介修改和新增版本须调用 propose_board_change，等待用户确认和工具返回结果；取消、超时或失败时明确说明未保存。其他写操作不支持。
 9. 动作执行不了（比如项目名不在系统里）时，直接说明没有这个项目，不要硬开。
 
 ## 回答风格（会被语音播报）
@@ -317,7 +350,9 @@ def _ui_context(ui: dict | None) -> str:
     if page == "board":
         parts.append(f"显示历史版本：{'是' if ui.get('showHistory') else '否'}")
     if page == "admin":
-        parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
+        parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}，访问状态：{ui.get('adminAccess') or 'unknown'}")
+    if page == "edit":
+        parts.append(f"编辑器当前有 {int(ui.get('editProjectCount') or 0)} 个项目、{int(ui.get('editVersionCount') or 0)} 个版本；未保存修改不等于服务器数据")
     # 后台统计与知识库文档是全局数据，任何页面都带上
     stats = ui.get("adminStats")
     if isinstance(stats, dict):
@@ -598,9 +633,8 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                 },
             ]
 
-            pending_actions: list[dict] = []
-            # 查询工具由服务端执行，结果回给模型；导航动作仍交给前端执行。
-            for round_index in range(3):
+            executed_actions: list[dict] = []
+            for round_index in range(6):
                 tool_calls: dict[int, dict] = {}
                 round_text = []
                 async for kind, payload in _stream_llm(messages):
@@ -609,15 +643,14 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                     elif kind == "tool_calls":
                         tool_calls = payload
                 slots = [slot for _, slot in sorted(tool_calls.items())]
-                queries = [slot for slot in slots if slot.get("name") == "query_board"]
-                pending_actions.extend(_parse_actions({"tool_calls": [
-                    {"function": {"name": slot["name"], "arguments": slot["arguments"]}}
-                    for slot in slots if slot.get("name") in ACTION_TOOLS
-                ]}))
-                if not queries or round_index == 2:
+                if not slots:
                     for token in round_text:
                         text_parts.append(token)
                         yield _sse("token", {"text": token})
+                    break
+                if round_index == 5:
+                    text_parts.append("操作步骤过多，请分开重试。")
+                    yield _sse("token", {"text": text_parts[-1]})
                     break
                 calls = []
                 for index, slot in enumerate(slots):
@@ -625,29 +658,53 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                     calls.append({"id": slot["id"], "type": "function", "function": {"name": slot["name"], "arguments": slot["arguments"] or "{}"}})
                 messages.append({"role": "assistant", "content": "".join(round_text) or None, "tool_calls": calls})
                 for slot in slots:
-                    if slot.get("name") == "query_board":
+                    name = slot.get("name", "")
+                    try:
+                        args = json.loads(slot.get("arguments") or "{}")
+                        if not isinstance(args, dict):
+                            raise ValueError("invalid args")
+                    except (ValueError, TypeError):
+                        args = {}
+                    if name == "query_board":
                         try:
-                            args = json.loads(slot.get("arguments") or "{}")
-                            result = _query_board(str(args.get("project") or ""))
-                        except (ValueError, TypeError, AttributeError):
-                            result = json.dumps({"error": "查询参数无效"}, ensure_ascii=False)
+                            result = _query_board(str(args.get("project") or ""), str(args.get("advisor") or ""), str(args.get("stage") or ""), args.get("projects") if isinstance(args.get("projects"), list) else None)
+                        except Exception:
+                            result = json.dumps({"ok": False, "message": "查询失败"}, ensure_ascii=False)
+                    elif name in ACTION_TOOLS or name == "propose_board_change":
+                        if len(executed_actions) >= MAX_ACTIONS:
+                            result = json.dumps({"ok": False, "message": "本轮操作数量已达上限"}, ensure_ascii=False)
+                        else:
+                            try:
+                                if name == "propose_board_change":
+                                    data, revision = read_board()
+                                    change = BoardChange(revision=revision, **args)
+                                    preview = prepare_change(data, change)
+                                    action = {"tool": "confirm_board_change", "args": {"change": change.model_dump(), "label": preview["label"], "before": preview["before"], "after": preview["after"]}}
+                                else:
+                                    parsed = _parse_actions({"tool_calls": [{"function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)}}]})
+                                    repaired, notes = _repair_actions(parsed, question, "", request.ui)
+                                    if not repaired:
+                                        raise ValueError("；".join(notes) or "缺少操作参数")
+                                    action = repaired[0]
+                                action_id = uuid.uuid4().hex
+                                action["action_id"] = action_id
+                                future = asyncio.get_running_loop().create_future()
+                                _pending_action_results[action_id] = future
+                                executed_actions.append(action)
+                                try:
+                                    yield _sse("action", action)
+                                    outcome = await asyncio.wait_for(future, 180 if name == "propose_board_change" else 8)
+                                except asyncio.TimeoutError:
+                                    outcome = {"ok": False, "message": "操作超时，未确认成功"}
+                                finally:
+                                    _pending_action_results.pop(action_id, None)
+                                result = json.dumps(outcome, ensure_ascii=False)
+                            except (ValueError, TypeError, HTTPException) as exc:
+                                result = json.dumps({"ok": False, "message": str(getattr(exc, "detail", exc))}, ensure_ascii=False)
                     else:
-                        result = "界面动作已安排，待回答后执行。"
+                        result = json.dumps({"ok": False, "message": "不支持的操作"}, ensure_ascii=False)
                     messages.append({"role": "tool", "tool_call_id": slot["id"], "content": result})
-            actions = pending_actions[:MAX_ACTIONS]
-            # 修掉模型偶尔给的空参数（缺项目名时从问题/回答/看板上下文补）
-            actions, repair_notes = _repair_actions(
-                actions, question, "".join(text_parts), request.ui
-            )
-
-            # 先说话、再动作：动作事件放在文字之后，界面切换更自然
-            for action in actions:
-                yield _sse("action", action)
-
-            if repair_notes:
-                note = "（" + "；".join(repair_notes) + "，可以说一下项目名）"
-                text_parts.append(note)
-                yield _sse("token", {"text": note})
+            actions = executed_actions
 
             if not "".join(text_parts).strip():
                 fallback = _fallback_text(question, actions)

@@ -42,12 +42,12 @@ project-showcase/
 
 1. 首次自动创建 Python 虚拟环境并安装后端依赖（优先用 uv；没装 uv 时回退到 `python -m venv`）；
 2. 首次自动 `npm install` + `npm run build`；
-3. 启动 `http://127.0.0.1:8000`，浏览器自动打开；API 文档在 `/docs`。
+3. 首次下载并校验 Windows 版 Nginx，启动后由 Nginx 将 `http://127.0.0.1:8088` 转发至本机 FastAPI `127.0.0.1:8000`；浏览器自动打开代理地址，API 文档在 `/docs`。退出启动脚本时同步停止本项目的 Nginx。
 
-可选环境变量：`APP_HOST`（默认 `127.0.0.1`）、`APP_PORT`（默认 `8000`）、`APP_FORCE_BUILD=1`（强制重建前端）。
+可选环境变量：`APP_HOST`（默认 `127.0.0.1`）、`APP_PORT`（后端端口，默认 `8000`）、`NGINX_PORT`（本机代理端口，默认 `8088`）、`APP_FORCE_BUILD=1`（强制重建前端）、`APP_NO_BROWSER=1`（不自动打开浏览器）。代理配置见 `deploy/nginx.conf.template`；它支持 WebSocket 和流式响应，仅监听本机。
 PowerShell 示例：`$env:APP_HOST='0.0.0.0'; $env:APP_PORT='8080'; .\start.ps1`
 
-> 需要本机有 Python 3.12 与 Node.js 20+（uv 可选）。前端构建完成后由后端直接托管，离线可用，无 CDN。
+> 需要本机有 Python 3.12、Node.js 20+ 和 curl（uv 可选）。Nginx 首次下载需要网络；下载后保存在 `.tools/`，不纳入版本管理。当前 Nginx 仅提供本机 HTTP 访问，公网部署仍需另行配置 HTTPS、鉴权与访问控制。
 
 ## 上线部署（生产 / 演示环境）
 
@@ -69,7 +69,7 @@ PowerShell 示例：`$env:APP_HOST='0.0.0.0'; $env:APP_PORT='8080'; .\start.ps1`
 
 1. 复制 `backend/.env.example` → `backend/.env`，填 `DASHSCOPE_API_KEY`、`LLM_API_KEY` 等；
 2. 运行 `start.cmd`（首次安装依赖 + 构建，需数分钟；安装时优先使用 `backend/wheels` 里的本地轮子）；
-3. 打开 `http://127.0.0.1:8000`，用 `GET /api/ready`（DB 就绪）和 `GET /api/v1/rag/health`（LLM/Chroma 能力）做健康检查；
+3. 打开 `http://127.0.0.1:8088`，用 `GET /api/ready`（DB 就绪）和 `GET /api/v1/rag/health`（LLM/Chroma 能力）做健康检查；
 4. 首次启动如果 `backend/data/chroma_storage` 为空且 `backend/data/docs` 有文档，服务会自动重建一次索引；也可以在管理后台「知识库管理」点「重建索引」。
 
 ### 端口与监听
@@ -123,7 +123,7 @@ PowerShell 示例：`$env:APP_HOST='0.0.0.0'; $env:APP_PORT='8080'; .\start.ps1`
 
 ## 页面
 
-- `http://127.0.0.1:8000/`：默认「生命周期看板」，五个阶段列展示当前版本卡；点卡片打开右侧详情抽屉。
+- `http://127.0.0.1:8088/`：默认「生命周期看板」，五个阶段列展示当前版本卡；点卡片打开右侧详情抽屉。
 - 顶部「数据修改」：进入 `#/edit` 数据编辑页，可改阶段名称与颜色、项目信息、成员、用户数、功能数、技术栈、项目图片和版本列表；保存后写浏览器 localStorage 并立即回看板。
 - 顶部「数据总览」：5 个 KPI + 阶段分布柱状图 / 阶段占比环图 / 近 8 周趋势 / 技术栈分布 / 近期风险版本。
 - 抽屉内含生命周期进度、版本信息、版本历史、近 4 周提交次数与「项目图片」。
@@ -232,3 +232,13 @@ cd backend
 在数字人面板点击“开启语音唤醒”，允许浏览器使用麦克风后，说“你好豆姐”进入连续对话；也可以直接说“你好豆姐，介绍这个项目”。唤醒后助手回复“你好，我在”，回答并播报完成后会继续听；说“再见豆姐”后助手回复“好的，再见”并回到等待唤醒状态。点击“关闭语音监听”完全关闭麦克风；点击原有麦克风按钮会先关闭持续监听，再进入单次语音输入。收起助手时也会停止监听。
 
 唤醒词识别使用现有 ASR 服务：检测到语音的片段会发送到该服务，启用语音识别和播报需要配置百炼密钥，回答还需要可用的语言模型。只有显式开启后才会监听；浏览器需要麦克风权限，本机使用 localhost 或 HTTPS。助手回答或播报时再次说“你好豆姐”可以打断，也可以在唤醒词后直接说新问题；普通声音不会直接触发打断。播报期间检测到的语音片段同样会发送到识别服务。
+
+### Agent 页面操作与项目修改
+
+Agent 可查询项目、指导老师、当前阶段和版本统计；页面动作完成后，实际结果会返回给 Agent，再由其回答。项目简介修改和新增版本会先显示修改前后预览；仅用户确认后才提交服务器，取消、权限不足或版本冲突均不会保存。项目写接口沿用 `ADMIN_TOKEN` 管理权限，未配置口令时沿用本机模式。
+
+当前页面操作仍是显式注册的导航、筛选、项目详情、图片和后台页签；其他未注册操作及删除功能不支持。数据修改页的未保存内容不作为服务器数据查询。
+
+### 单独启动本机 Nginx
+
+后端已在 `127.0.0.1:8000` 运行时，可执行 `powershell -ExecutionPolicy Bypass -File scripts/start-nginx.ps1`，然后访问 `http://127.0.0.1:8088`。关闭本项目的代理使用 `powershell -ExecutionPolicy Bypass -File scripts/start-nginx.ps1 -Stop`。可通过 `-UpstreamPort` 和 `-ListenPort` 指定端口。

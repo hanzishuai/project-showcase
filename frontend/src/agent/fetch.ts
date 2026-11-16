@@ -57,7 +57,7 @@ function resolveUrl(input: RequestInfo | URL): string {
   return (input as Request).url
 }
 
-async function consumeStream(stream: ReadableStream<Uint8Array>, question: string): Promise<void> {
+async function consumeStream(stream: ReadableStream<Uint8Array>, question: string, signal?: AbortSignal): Promise<void> {
   const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
@@ -80,7 +80,11 @@ async function consumeStream(stream: ReadableStream<Uint8Array>, question: strin
           const payload = line.slice(5).trim()
           if (eventName === 'action') {
             try {
-              dispatchAction(JSON.parse(payload) as AgentAction)
+              const action = JSON.parse(payload) as AgentAction
+              void dispatchAction(action, signal).then(async outcome => {
+                if (!action.action_id || signal?.aborted) return
+                await fetch('/api/v1/agent/action-result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action_id: action.action_id, ...outcome }), signal })
+              }).catch(() => {})
             } catch {
               // 忽略坏帧
             }
@@ -131,7 +135,7 @@ export const agentFetch: typeof fetch = async (input: RequestInfo | URL, init?: 
 
   if (!response.ok || !response.body) return response
   const [forSdk, forActions] = response.body.tee()
-  void consumeStream(forActions, question)
+  void consumeStream(forActions, question, init?.signal ?? undefined)
   return new Response(forSdk, {
     status: response.status,
     statusText: response.statusText,
