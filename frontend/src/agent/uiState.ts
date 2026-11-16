@@ -11,6 +11,9 @@ export const uiState = reactive({
   openVersion: '',
   slideIndex: -1,
   adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge' | 'settings',
+  adminAccess: 'unknown' as 'unknown' | 'ready' | 'need-token',
+  editProjectCount: 0,
+  editVersionCount: 0,
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
   /** 看板项目名，作为 Agent 的可用目标（避免它编造项目） */
@@ -32,7 +35,7 @@ export const uiState = reactive({
     features: number
   }>,
   /** 管理后台概览数据 */
-  adminStats: { sessions: 0, documents: 0 } as { sessions: number; documents: number },
+  adminStats: null as null | { sessions: number; documents: number },
   /** 知识库文档名，让 Agent 能回答「知识库里有哪些文档」 */
   knowledgeDocs: [] as string[]
 })
@@ -53,6 +56,9 @@ export function snapshotUiState(): Record<string, unknown> {
     boardProjects: uiState.boardProjects,
     adminStats: uiState.adminStats,
     knowledgeDocs: uiState.knowledgeDocs,
-    adminTab: uiState.adminTab
+    adminTab: uiState.adminTab,
+    adminAccess: uiState.adminAccess,
+    editProjectCount: uiState.editProjectCount,
+    editVersionCount: uiState.editVersionCount
   }
 }

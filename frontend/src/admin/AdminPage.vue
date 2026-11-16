@@ -80,6 +80,10 @@ watch(
 watch(active, (tab) => {
   uiState.adminTab = tab
 })
+watch(authState, (state) => {
+  uiState.adminAccess = state === 'checking' ? 'unknown' : state
+  if (state === 'need-token') { uiState.adminStats = null; uiState.knowledgeDocs = [] }
+}, { immediate: true })
 const views = { dashboard: Dashboard, conversations: Conversations, knowledge: KnowledgeBase, settings: Settings }
 const currentView = computed(() => views[active.value])
 

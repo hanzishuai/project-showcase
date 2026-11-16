@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { uiState } from '../agent/uiState'
 import {
   loadKanbanData,
   legacyKanbanData,
@@ -31,6 +32,11 @@ const message = ref('')
 const messageType = ref<'info' | 'error'>('info')
 
 const totalVersions = computed(() => projects.value.reduce((total, project) => total + project.versions.length, 0))
+
+watchEffect(() => {
+  uiState.editProjectCount = projects.value.length
+  uiState.editVersionCount = totalVersions.value
+})
 
 const splitStack = (value: string) => value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
 

@@ -5,6 +5,8 @@
 #   ADMIN_TOKEN  管理口令（监听非本机地址时必填，除非 ALLOW_INSECURE=1）
 #   ALLOW_INSECURE=1  已由反向代理做登录鉴权时跳过 ADMIN_TOKEN 检查
 #   APP_FORCE_BUILD=1  强制重新构建前端
+#   NGINX_PORT  本机反向代理端口（默认 8088）
+#   APP_NO_BROWSER=1  不自动打开浏览器
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $py = Join-Path $root 'backend\.venv\Scripts\python.exe'
@@ -102,14 +104,19 @@ if ($listener) {
   throw '端口被占用'
 }
 
+$nginxPort = if ($env:NGINX_PORT) { [int]$env:NGINX_PORT } else { 8088 }
+$proxyScript = Join-Path $root 'scripts\start-nginx.ps1'
+& $proxyScript -UpstreamPort ([int]$appPort) -ListenPort $nginxPort
 $appLog = Join-Path $root 'backend\data\app.log'
 $env:APP_LOG_FILE = $appLog
-Write-Host ('[3/3] 启动服务：http://{0}:{1} （健康检查 /api/ready，API 文档 /docs）' -f $appHost, $appPort) -ForegroundColor Green
+Write-Host ('[3/3] Nginx: http://127.0.0.1:{0} -> {1}:{2} (health: /api/ready)' -f $nginxPort, $appHost, $appPort) -ForegroundColor Green
 Write-Host ('      应用日志：{0}（访问日志在控制台；用 NSSM 时请同时重定向 stdout/stderr）' -f $appLog) -ForegroundColor DarkGray
 if ($appHost -ne '127.0.0.1' -and $appHost -ne 'localhost') {
   Write-Host '      提示：管理接口已按 ADMIN_TOKEN 鉴权；公网仍建议在反向代理层加 HTTPS 与登录。' -ForegroundColor Yellow
 }
-Start-Job -ScriptBlock { param($url) Start-Sleep -Seconds 2; Start-Process $url } -ArgumentList ('http://127.0.0.1:' + $appPort) | Out-Null
+if ($env:APP_NO_BROWSER -ne '1') {
+  Start-Job -ScriptBlock { param($url) Start-Sleep -Seconds 2; Start-Process $url } -ArgumentList ('http://127.0.0.1:' + $nginxPort) | Out-Null
+}
 
 # 不要用 2>&1 | Tee-Object：Windows PowerShell 5.1 会把原生命令 stderr 当成终止错误。
 $previousEap = $ErrorActionPreference
@@ -121,5 +128,6 @@ try {
 } finally {
   Pop-Location
   $ErrorActionPreference = $previousEap
+  & $proxyScript -Stop
 }
 exit $serverExit

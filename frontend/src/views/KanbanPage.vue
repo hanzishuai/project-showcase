@@ -293,8 +293,12 @@ const setupAgentActions = () => {
       return true
     }),
     registerAction('filter_board', (args) => {
-      if ('project' in args) projectFilter.value = String(args.project ?? '')
-      if ('advisor' in args) ownerFilter.value = String(args.advisor ?? '')
+      const project = String(args.project ?? '')
+      const advisor = String(args.advisor ?? '')
+      if (project && !projectNames.includes(project)) throw new Error('未找到该项目，筛选没有改变')
+      if (advisor && !owners.includes(advisor)) throw new Error('未找到该指导老师，筛选没有改变')
+      if ('project' in args) projectFilter.value = project
+      if ('advisor' in args) ownerFilter.value = advisor
       if ('show_history' in args) historyOnly.value = Boolean(args.show_history)
       if (activeView.value !== 'board') switchView('board')
       const count = filteredVersions.value.length
@@ -305,14 +309,14 @@ const setupAgentActions = () => {
       const name = String(args.project ?? '').trim()
       const version = String(args.version ?? '').trim()
       if (!name) return false
-      const exact = versions.find((item) => item.project.name === name && (!version || item.number === version))
-      const target =
-        exact ??
-        versions.find((item) => item.project.name.includes(name) || name.includes(item.project.name))
+      const matched = versions.filter((item) => item.project.name === name || item.project.name.includes(name) || name.includes(item.project.name))
+      const names = new Set(matched.map(item => item.project.name))
+      if (names.size > 1) throw new Error('项目名称不唯一，请提供完整名称')
+      const target = version ? matched.find(item => item.number === version) : matched.find(item => item.current)
       if (!target) return false
       switchView('board')
       openDrawer(target.id)
-      return `已打开「${target.project.name}」`
+      return `已打开「${target.project.name}」${target.number}版本`
     }),
     registerAction('close_drawer', () => {
       closeDrawer()
@@ -331,7 +335,7 @@ const setupAgentActions = () => {
         openDrawer(target.id)
       }
       if (!selected.value) return false
-      const total = selected.value.project.images.length
+      const total = galleryMedia.value.length
       if (!total) return false
       const index = Math.min(Math.max(Number(args.index ?? 0), 0), total - 1)
       openGallery(index)

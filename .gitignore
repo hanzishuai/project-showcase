@@ -34,3 +34,6 @@ backend/data/qa_log.sqlite3
 backend/data/*.sqlite3-*
 backend/data/*.db-*
 backend/data/settings.json
+
+# 本地 Nginx 运行程序与配置
+.tools/
