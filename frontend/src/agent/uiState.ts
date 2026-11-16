@@ -8,6 +8,8 @@ export const uiState = reactive({
   advisorFilter: '',
   showHistory: false,
   openProject: '',
+  openVersion: '',
+  slideIndex: -1,
   adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge' | 'settings',
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
@@ -43,6 +45,8 @@ export function snapshotUiState(): Record<string, unknown> {
     advisorFilter: uiState.advisorFilter,
     showHistory: uiState.showHistory,
     openProject: uiState.openProject,
+    openVersion: uiState.openVersion,
+    slideIndex: uiState.slideIndex,
     galleryOpen: uiState.galleryOpen,
     galleryIndex: uiState.galleryIndex,
     visibleCards: uiState.visibleCards,

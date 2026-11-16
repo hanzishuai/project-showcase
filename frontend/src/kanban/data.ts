@@ -84,34 +84,50 @@ export function defaultKanbanData(): KanbanData {
   }
 }
 
-export function loadKanbanData(): KanbanData {
+let serverBoard: KanbanData = defaultKanbanData()
+let serverRevision = 0
+let boardAvailable = false
+
+export async function initializeKanbanData(): Promise<void> {
+  try {
+    const response = await fetch('/api/board', { cache: 'no-store' })
+    if (!response.ok) throw new Error('HTTP ' + response.status)
+    const result = await response.json()
+    if (!Array.isArray(result.data?.stages) || !Array.isArray(result.data?.projects)) throw new Error('数据格式错误')
+    serverBoard = result.data
+    serverRevision = result.revision
+    boardAvailable = true
+  } catch (error) {
+    boardAvailable = false
+    console.error('无法读取服务器看板数据', error)
+    window.alert('无法读取服务器看板，当前显示默认数据且无法保存。请检查服务后刷新。')
+  }
+}
+
+export function loadKanbanData(): KanbanData { return clone(serverBoard) }
+export function legacyKanbanData(): KanbanData | null {
   try {
     const raw = localStorage.getItem(KANBAN_DATA_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as KanbanData
-      if (Array.isArray(parsed.stages) && parsed.stages.length > 0 && Array.isArray(parsed.projects)) {
-        // 旧代次存档不再沿用，直接回退到当前默认资料。
-        if (parsed.schema !== KANBAN_SCHEMA) return defaultKanbanData()
-        for (const project of parsed.projects) {
-          if (!Array.isArray(project.videos)) project.videos = []
-          if (typeof project.intro !== 'string') project.intro = ''
-        }
-        return parsed
-      }
-    }
-  } catch {
-    // 浏览器禁用本地存储或数据损坏时回退到默认数据
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    return Array.isArray(data.stages) && data.stages.length && Array.isArray(data.projects) ? data : null
+  } catch { return null }
+}
+export async function saveKanbanData(data: KanbanData): Promise<void> {
+  if (!boardAvailable) throw new Error('无法连接服务器，请刷新后重试')
+  const token = localStorage.getItem('admin-token') || ''
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['X-Admin-Token'] = token
+  const response = await fetch('/api/board', { method: 'PUT', headers, body: JSON.stringify({ data, revision: serverRevision }) })
+  if (!response.ok) {
+    if (response.status === 409) throw new Error('服务器数据已被其他人修改，请刷新后重新编辑')
+    if (response.status === 401 || response.status === 403) throw new Error('需要管理员口令，请先在管理后台输入口令')
+    throw new Error('保存失败（HTTP ' + response.status + '）')
   }
-  return defaultKanbanData()
+  serverRevision = (await response.json()).revision
+  serverBoard = clone(data)
 }
-
-export function saveKanbanData(data: KanbanData): void {
-  localStorage.setItem(KANBAN_DATA_KEY, JSON.stringify({ ...data, schema: KANBAN_SCHEMA }))
-}
-
-export function resetKanbanData(): void {
-  localStorage.removeItem(KANBAN_DATA_KEY)
-}
+export function resetKanbanData(): void { serverBoard = defaultKanbanData() }
 
 // 兼容旧引用：看板运行时以 loadKanbanData() 为准
 export const KANBAN_STAGES = KANBAN_DEFAULT_STAGES

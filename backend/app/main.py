@@ -22,6 +22,7 @@ from .admin_compat import router as admin_router
 from .settings_api import apply_overrides
 from .settings_api import router as settings_router
 from .agent import router as agent_router
+from .board import router as board_router
 from pp7rag.ragapi.routes import router as rag_router
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def _needs_admin(path: str, method: str) -> bool:
     if path.startswith(_ADMIN_PROTECTED_PREFIXES):
         return True
     # 项目数据的写操作也纳入管理面（GET 保持公开，前端只读）
-    if path.startswith("/api/projects") and method not in ("GET", "HEAD", "OPTIONS"):
+    if path.startswith(("/api/projects", "/api/board")) and method not in ("GET", "HEAD", "OPTIONS"):
         return True
     return False
 
@@ -281,6 +282,7 @@ app.include_router(admin_router)
 app.include_router(settings_router)
 # 实验：语义操作界面的 Agent（白名单动作 + LLM function calling）
 app.include_router(agent_router)
+app.include_router(board_router)
 
 MEDIA_DIR = REPO_ROOT / "assets" / "images"
 if MEDIA_DIR.exists():

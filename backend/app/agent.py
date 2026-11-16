@@ -20,6 +20,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .board import read_board
 from pp7rag.config import settings
 from pp7rag.engine.prompts import format_references
 from pp7rag.ragapi import qa_log, retrieval
@@ -54,7 +55,7 @@ SYSTEM_MAP = """
 - board（生命周期看板，默认页）：
   - 顶部统计：版本总数、在研、已上线；右侧筛选：项目、指导老师、显示历史版本开关。
   - 两个视图：board=生命周期看板（需求对接/数据库设计/开发/测试/上线 五列版本卡）；overview=数据总览（4 个 KPI + 阶段分布/占比/趋势/技术栈/近期风险等图表）。
-  - 点版本卡打开右侧详情抽屉：生命周期进度、版本信息（指导老师/团队/技术栈/日期）、版本历史、近 4 周提交次数、项目图片（可点开大图灯箱）。
+  - 点版本卡打开详情：项目名称、版本信息、项目简介及图片/视频轮播。
 - edit（数据修改）：可改阶段名称与颜色、项目信息、成员、用户数、功能数、技术栈、图片、版本列表；可保存或恢复默认。
 - admin（管理后台）：
   - dashboard 工作概览：会话总数、知识库文档数、最近会话表。
@@ -187,7 +188,30 @@ TOOLS = [
     },
 ]
 
-ALLOWED_TOOLS = {item["function"]["name"] for item in TOOLS}
+ACTION_TOOLS = {item["function"]["name"] for item in TOOLS}
+TOOLS.append({"type": "function", "function": {"name": "query_board", "description": "查询服务器上的最新看板项目资料。需要回答项目、版本、简介、进度或比较时使用；不传 project 获取所有项目的摘要，传项目名获取该项目完整文字资料。", "parameters": {"type": "object", "properties": {"project": {"type": "string", "description": "项目名称，不传表示列出全部项目摘要"}}}}})
+ALLOWED_TOOLS = ACTION_TOOLS
+
+def _query_board(project: str = "") -> str:
+    data, _ = read_board()
+    stages = data.get("stages", [])
+    projects = data.get("projects", [])
+    result = []
+    for item in projects:
+        name = str(item.get("name", ""))
+        if project and project.casefold() not in name.casefold():
+            continue
+        versions = []
+        for v in item.get("versions", []):
+            stage_index = v.get("stage", -1)
+            stage = stages[stage_index].get("name", "未知") if isinstance(stage_index, int) and 0 <= stage_index < len(stages) else "未知"
+            versions.append({**v, "stage_name": stage})
+        entry = {"name": name, "owner": item.get("owner"), "team": item.get("team"), "stack": item.get("stack"), "versions": versions}
+        if project:
+            entry.update({"intro": item.get("intro"), "users": item.get("users"), "features": item.get("features"), "image_count": len(item.get("images") or []), "video_count": len(item.get("videos") or [])})
+        result.append(entry)
+    return json.dumps({"projects": result, "total": len(result)}, ensure_ascii=False)
+
 
 # 复用连接：每轮新建客户端会让每次提问都重做 DNS/TLS 握手（约 200-400ms）
 _http_client: httpx.AsyncClient | None = None
@@ -217,7 +241,7 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
 
 ## 工作方式
 1. 用户要求「打开/切到/筛选/看看某个项目/返回」时，调用对应动作；动作参数必须来自系统地图或用户原话，不要猜项目名。
-2. 用户问资料类问题（平台是什么、项目进度、怎么用）时，参考【参考资料】回答，不要调用动作。
+2. 用户问项目资料、进度或对比时，先调用 query_board 查询服务器实时数据；指定项目时传项目名查完整资料。页面操作说明以系统地图为准，知识文档作为补充。查询不会操作界面。
 3. 一次最多调用 {max_actions} 个动作；能用一个动作解决就别拆成多个；
    但用户明确要求两个步骤（「先回到看板，再打开某某的详情」）时，必须按顺序都调用，不能省略。
 4. 说完话再动作用一句话衔接，例如「这就打开给你看」。不要描述技术细节，不要说「调用工具」。
@@ -285,11 +309,13 @@ def _ui_context(ui: dict | None) -> str:
         parts.append(f"项目筛选：{project or '全部'}")
         parts.append(f"指导老师筛选：{advisor or '全部'}")
         if ui.get("openProject"):
-            parts.append(f"已打开详情：{ui.get('openProject')}")
+            parts.append(f"已打开详情：{ui.get('openProject')}，版本：{ui.get('openVersion') or '未知'}，轮播位置：{int(ui.get('slideIndex') or 0) + 1}")
         if ui.get("galleryOpen"):
             parts.append(f"图片灯箱已打开（第 {int(ui.get('galleryIndex') or 0) + 1} 张）")
         else:
             parts.append("图片灯箱未打开")
+    if page == "board":
+        parts.append(f"显示历史版本：{'是' if ui.get('showHistory') else '否'}")
     if page == "admin":
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}")
     # 后台统计与知识库文档是全局数据，任何页面都带上
@@ -327,7 +353,7 @@ def _ui_context(ui: dict | None) -> str:
                     users=item.get("users", 0), features=item.get("features", 0)
                 )
             summary.append(line)
-        parts.append("看板项目（名称：版本 / 阶段 / 指导老师 / 技术栈 / 团队）：" + "；".join(summary))
+        parts.append("看板项目（名称：版本 / 阶段 / 指导老师 / 技术栈 / 团队（仅页面摘要，完整数据需查询））：" + "；".join(summary))
     else:
         projects = ui.get("projects") or []
         parts.append("看板上的项目：" + ("、".join(str(name) for name in projects[:20]) if projects else "未知"))
@@ -423,7 +449,9 @@ async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_
                 yield ("token", content)
             for call in delta.get("tool_calls") or []:
                 index = int(call.get("index") or 0)
-                slot = collected.setdefault(index, {"name": "", "arguments": ""})
+                slot = collected.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                if call.get("id"):
+                    slot["id"] = call["id"]
                 function = call.get("function") or {}
                 if function.get("name"):
                     slot["name"] = function["name"]
@@ -570,18 +598,43 @@ async def agent_ask(request: AgentAskRequest) -> StreamingResponse:
                 },
             ]
 
-            tool_calls: dict[int, dict] = {}
-            async for kind, payload in _stream_llm(messages):
-                if kind == "token":
-                    text_parts.append(payload)
-                    yield _sse("token", {"text": payload})
-                elif kind == "tool_calls":
-                    tool_calls = payload
-
-            actions = _parse_actions({"tool_calls": [
-                {"function": {"name": slot["name"], "arguments": slot["arguments"]}}
-                for _, slot in sorted(tool_calls.items())
-            ]})
+            pending_actions: list[dict] = []
+            # 查询工具由服务端执行，结果回给模型；导航动作仍交给前端执行。
+            for round_index in range(3):
+                tool_calls: dict[int, dict] = {}
+                round_text = []
+                async for kind, payload in _stream_llm(messages):
+                    if kind == "token":
+                        round_text.append(payload)
+                    elif kind == "tool_calls":
+                        tool_calls = payload
+                slots = [slot for _, slot in sorted(tool_calls.items())]
+                queries = [slot for slot in slots if slot.get("name") == "query_board"]
+                pending_actions.extend(_parse_actions({"tool_calls": [
+                    {"function": {"name": slot["name"], "arguments": slot["arguments"]}}
+                    for slot in slots if slot.get("name") in ACTION_TOOLS
+                ]}))
+                if not queries or round_index == 2:
+                    for token in round_text:
+                        text_parts.append(token)
+                        yield _sse("token", {"text": token})
+                    break
+                calls = []
+                for index, slot in enumerate(slots):
+                    slot["id"] = slot.get("id") or f"call_{round_index}_{index}"
+                    calls.append({"id": slot["id"], "type": "function", "function": {"name": slot["name"], "arguments": slot["arguments"] or "{}"}})
+                messages.append({"role": "assistant", "content": "".join(round_text) or None, "tool_calls": calls})
+                for slot in slots:
+                    if slot.get("name") == "query_board":
+                        try:
+                            args = json.loads(slot.get("arguments") or "{}")
+                            result = _query_board(str(args.get("project") or ""))
+                        except (ValueError, TypeError, AttributeError):
+                            result = json.dumps({"error": "查询参数无效"}, ensure_ascii=False)
+                    else:
+                        result = "界面动作已安排，待回答后执行。"
+                    messages.append({"role": "tool", "tool_call_id": slot["id"], "content": result})
+            actions = pending_actions[:MAX_ACTIONS]
             # 修掉模型偶尔给的空参数（缺项目名时从问题/回答/看板上下文补）
             actions, repair_notes = _repair_actions(
                 actions, question, "".join(text_parts), request.ui

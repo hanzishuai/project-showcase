@@ -86,3 +86,11 @@ class ProjectStage(Base):
     note: Mapped[str] = mapped_column(String(200), default="")
 
     project: Mapped[Project] = relationship(back_populates="stages")
+
+
+class KanbanBoard(Base):
+    __tablename__ = "kanban_board"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

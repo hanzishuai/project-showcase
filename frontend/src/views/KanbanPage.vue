@@ -104,16 +104,6 @@ const lanes = computed(() => KANBAN_STAGES.map((stage, index) => ({
 })))
 
 const selectedStage = computed(() => selected.value ? KANBAN_STAGES[selected.value.stage] : null)
-const drawerDates = computed(() => selected.value
-  ? KANBAN_STAGES.map((_, index) => index <= selected.value!.stage ? addDays(selected.value!.start, index * 12) : '—')
-  : [])
-const drawerHistory = computed(() => {
-  if (!selected.value) return []
-  return selected.value.project.versions
-    .slice()
-    .sort((a, b) => compareVersion(b.number, a.number))
-    .map((version) => ({ ...version, selected: version.number === selected.value!.number }))
-})
 const drawerOpen = computed(() => selected.value !== null)
 const galleryOpen = computed(() => galleryIndex.value >= 0 && selected.value !== null)
 type GalleryItem = { type: 'image' | 'video'; src: string }
@@ -128,27 +118,6 @@ const galleryMedia = computed<GalleryItem[]>(() => {
 })
 const currentMedia = computed(() => galleryMedia.value[slideIndex.value] ?? null)
 const videoCount = computed(() => (selected.value?.project.videos ?? []).length)
-const selectedProjectCurrentVersion = computed(() => {
-  const project = selected.value?.project
-  if (!project) return null
-  const latest = project.versions.map((version) => version.number).sort(compareVersion).at(-1)
-  return project.versions.find((version) => version.number === latest) ?? null
-})
-const isLiveProject = computed(() => selectedProjectCurrentVersion.value?.stage === lastStage)
-// 真实资料未提供累计用户/上线功能数时，不展示两枚「—」空卡，回退到项目简介。
-const hasUsageData = computed(() => {
-  const project = selected.value?.project
-  return !!project && ((project.users ?? 0) > 0 || (project.features ?? 0) > 0)
-})
-const usageMetrics = computed(() => {
-  const project = selected.value?.project
-  if (!project) return []
-  return [
-    { key: 'users', label: '累计用户', value: project.users, unit: '人', accent: '#22D3EE', note: '当前上线版本累计' },
-    { key: 'features', label: '上线功能', value: project.features, unit: '项', accent: '#34D399', note: '当前上线版本已完成' }
-  ]
-})
-
 const stageColor = (index: number) => KANBAN_STAGES[index]?.color ?? '#64748B'
 const switchView = (view: 'overview' | 'board') => {
   activeView.value = view
@@ -387,6 +356,8 @@ watchEffect(() => {
   uiState.advisorFilter = ownerFilter.value
   uiState.showHistory = historyOnly.value
   uiState.openProject = selected.value?.project.name ?? ''
+  uiState.openVersion = selected.value?.number ?? ''
+  uiState.slideIndex = selected.value ? slideIndex.value : -1
   uiState.modalOpen = galleryOpen.value
   uiState.galleryOpen = galleryOpen.value
   uiState.galleryIndex = galleryIndex.value
@@ -581,70 +552,32 @@ onBeforeUnmount(() => {
               <path d="M5 5 19 19M19 5 5 19" />
             </svg>
           </button>
+          <div class="drawer-heading">
           <h2>{{ selected.project.name }}</h2>
           <div class="drawer-badges">
             <span class="badge">{{ selected.number }}</span>
             <span v-if="selected.current" class="badge current">当前版本</span>
             <span class="stage-badge" :style="{ '--stage': selectedStage.color }">{{ selectedStage.name }}</span>
           </div>
+          </div>
+          <div class="drawer-version-info" aria-label="版本信息">
+            <div><span>指导老师</span><strong>{{ selected.project.owner }}</strong></div>
+            <div><span>团队成员</span><strong>{{ selected.project.team }}</strong></div>
+            <div><span>技术栈</span><strong>{{ selected.project.stack.length ? selected.project.stack.join(' / ') : '—' }}</strong></div>
+            <div><span>开始日期</span><strong>{{ selected.start }}</strong></div>
+            <div><span>{{ selected.project.versions.find(v => v.number === selected.project.versions.map(item => item.number).sort(compareVersion).at(-1))?.stage === lastStage ? '交付时间' : '预计交付' }}</span><strong>{{ selected.delivery }}</strong></div>
+          </div>
         </div>
         <div class="drawer-body">
           <div class="drawer-col">
             <section class="section">
-              <h3>生命周期进度</h3>
-              <div class="segments detail-progress" :style="{ '--stage': selectedStage.color }">
-                <span
-                  v-for="(stage, index) in KANBAN_STAGES"
-                  :key="stage.name"
-                  class="segment"
-                  :class="{ complete: index < selected.stage, active: index === selected.stage }"
-                ></span>
-              </div>
-              <div class="date-grid">
-                <span v-for="(date, index) in drawerDates" :key="index">{{ date }}</span>
-              </div>
-            </section>
-
-            <section class="section">
-              <h3>版本信息</h3>
-              <div class="info-grid">
-                <div><small>指导老师</small><strong>{{ selected.project.owner }}</strong></div>
-                <div><small>团队成员</small><strong>{{ selected.project.team }}</strong></div>
-                <div><small>技术栈</small><strong>{{ selected.project.stack.length ? selected.project.stack.join(' / ') : '—' }}</strong></div>
-                <div><small>开始日期</small><strong>{{ selected.start }}</strong></div>
-                <div><small>{{ isLiveProject ? '交付时间' : '预计交付' }}</small><strong>{{ selected.delivery }}</strong></div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h3>版本历史</h3>
-              <div class="timeline">
-                <div v-for="version in drawerHistory" :key="version.number" class="timeline-item" :class="{ selected: version.selected }">
-                  <div class="timeline-head">{{ version.number }}<span>{{ version.start }} · {{ KANBAN_STAGES[version.stage].name }}</span></div>
-                  <p>{{ version.note }}</p>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <div class="drawer-col">
-            <section v-if="isLiveProject && hasUsageData" class="section">
-              <h3>项目使用情况 <span class="section-count">当前上线版本</span></h3>
-              <div class="usage-stats">
-                <div v-for="metric in usageMetrics" :key="metric.key" class="usage-stat" :style="{ '--accent': metric.accent }">
-                  <span class="usage-stat-label">{{ metric.label }}</span>
-                  <span class="usage-stat-value"><strong>{{ metric.value > 0 ? metric.value.toLocaleString() : '—' }}</strong><span>{{ metric.value > 0 ? metric.unit : '' }}</span></span>
-                  <span class="usage-stat-note">{{ metric.note }}</span>
-                </div>
-              </div>
-            </section>
-            <section v-else class="section">
               <h3>项目简介</h3>
               <p class="project-intro">{{ selected.project.intro || '该项目暂未提供文字简介，可在「数据修改」页补充。' }}</p>
             </section>
-
+          </div>
+          <div class="drawer-col">
             <section class="section">
-              <h3>{{ videoCount ? '项目图片 / 视频' : '项目图片' }}<span class="section-count">{{ galleryMedia.length }} 个<span v-if="videoCount">（含 {{ videoCount }} 个视频）</span></span></h3>
+              <h3>{{ videoCount ? '项目图片 / 视频' : '项目图片' }}<span class="section-count">{{ galleryMedia.length }} 个<span v-if="videoCount">（含 {{ videoCount }} 个视频）</span></span><span v-if="galleryMedia.length" class="gallery-heading-hint">点击图片可放大查看</span></h3>
               <div v-if="galleryMedia.length" class="shot-slideshow">
                 <div
                   class="shot-slide"
@@ -701,7 +634,6 @@ onBeforeUnmount(() => {
                     @click.stop="setSlide(index)"
                   ></button>
                 </div>
-                <p class="gallery-hint">点击图片可放大查看</p>
               </div>
               <p v-else class="gallery-hint">暂无项目图片或视频</p>
             </section>
