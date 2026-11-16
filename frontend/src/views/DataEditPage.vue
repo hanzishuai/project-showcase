@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   loadKanbanData,
-  resetKanbanData,
+  legacyKanbanData,
+  defaultKanbanData,
   saveKanbanData,
   type KanbanData,
   type KanbanStage,
@@ -33,8 +34,7 @@ const totalVersions = computed(() => projects.value.reduce((total, project) => t
 
 const splitStack = (value: string) => value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
 
-const load = () => {
-  const data = loadKanbanData()
+const load = (data = loadKanbanData()) => {
   stages.value = data.stages.map((stage) => ({ ...stage }))
   projects.value = data.projects.map((project) => ({
     name: project.name,
@@ -253,7 +253,7 @@ const validate = (): string[] => {
   return errors
 }
 
-const save = () => {
+const save = async () => {
   const errors = validate()
   if (errors.length) {
     messageType.value = 'error'
@@ -286,13 +286,13 @@ const save = () => {
     }))
   }
   const serialized = JSON.stringify(payload)
-  if (serialized.length > 2_400_000) {
+  if (serialized.length > 20_000_000) {
     messageType.value = 'error'
-    message.value = '保存内容约 ' + (serialized.length / 1024 / 1024).toFixed(1) + ' MB，超出浏览器本地存储上限；请删减项目图片，或把大视频改成 /media 地址（不要内嵌）后再保存。'
+    message.value = '保存内容约 ' + (serialized.length / 1024 / 1024).toFixed(1) + ' MB，超出保存大小上限；请删减项目图片，或把大视频改成 /media 地址（不要内嵌）后再保存。'
     return
   }
   try {
-    saveKanbanData(payload)
+    await saveKanbanData(payload)
     messageType.value = 'info'
     message.value = '已保存，正在返回看板…'
     window.setTimeout(() => { window.location.hash = '#/' }, 260)
@@ -302,10 +302,17 @@ const save = () => {
   }
 }
 
+const importLegacy = () => {
+  const legacy = legacyKanbanData()
+  if (!legacy) { message.value = '当前浏览器没有旧存档'; return }
+  if (!window.confirm('将旧浏览器存档载入编辑器，保存后才会覆盖服务器看板。继续？')) return
+  load(legacy)
+  message.value = '已载入旧存档，请检查后保存；原存档仍保留在浏览器。'
+}
+
 const restoreDefaults = () => {
   if (!window.confirm('恢复默认数据会覆盖当前所有修改，确认继续？')) return
-  resetKanbanData()
-  load()
+  load(defaultKanbanData())
   messageType.value = 'info'
   message.value = '已恢复默认数据，点击保存后生效'
 }
@@ -325,6 +332,7 @@ const restoreDefaults = () => {
       </div>
       <div class="editor-actions">
         <span v-if="message" class="editor-message" :class="messageType">{{ message }}</span>
+        <button v-if="legacyKanbanData()" class="ghost-btn" type="button" @click="importLegacy">导入本机旧数据</button>
         <button class="ghost-btn" type="button" @click="restoreDefaults">恢复默认</button>
         <a class="ghost-btn" href="#/">返回看板</a>
         <button class="primary-btn" type="button" @click="save">保存并查看看板</button>
@@ -335,7 +343,7 @@ const restoreDefaults = () => {
       <section class="editor-intro">
         <div>
           <h1>数据修改</h1>
-          <p>修改生命周期看板的阶段、项目与版本；保存后立即生效。数据保存在当前浏览器。</p>
+          <p>修改生命周期看板的阶段、项目与版本；保存后立即生效。数据保存在服务器，其他浏览器刷新后可见。</p>
         </div>
         <div class="editor-summary">{{ projects.length }} 个项目 · {{ totalVersions }} 个版本</div>
       </section>
@@ -417,7 +425,7 @@ const restoreDefaults = () => {
                 </div>
                 <div v-else class="image-empty">还没有项目视频，可上传 ≤2 MB 的小视频内嵌，或把大视频放进 assets/images 后填 /media/文件名.mp4</div>
               </div>
-              <p class="image-hint">内嵌视频单个不超过 2 MB（转成 base64 会变大，尽量只放短视频）；大视频请用地址方式。图片 + 视频总量受浏览器本地存储约 2.4 MB 限制。</p>
+              <p class="image-hint">内嵌视频单个不超过 2 MB（转成 base64 会变大，尽量只放短视频）；大视频请用地址方式。建议使用视频地址以减小数据体积。</p>
             </div>
           </div>
 

@@ -439,8 +439,7 @@
 }
 .drawer .drawer-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: calc(24px * var(--detail-scale));
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
 }
 .drawer .drawer-col {
@@ -562,3 +561,40 @@
 #data-editor .intro-field textarea {
   min-height: 88px;
 }
+
+/* 版本信息与项目标题并列，正文保留完整宽度。 */
+.drawer .drawer-header { display: grid; grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.5fr); gap: 28px; align-items: center; padding-right: 90px; }
+.drawer .drawer-heading { min-width: 0; }
+.drawer .drawer-heading h2 { overflow-wrap: anywhere; }
+.drawer .drawer-version-info { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; min-width: 0; }
+.drawer .drawer-version-info span { display: block; color: var(--weak); font-size: 15px; margin-bottom: 5px; }
+.drawer .drawer-version-info strong { display: block; color: var(--text); font-size: 17px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+
+/* 紧凑详情：简介在上，图片使用剩余空间并保持完整显示。 */
+.drawer .drawer-header { padding-top: 20px; padding-bottom: 20px; }
+.drawer .drawer-heading h2 { font-size: 34px; margin-bottom: 10px; }
+.drawer .drawer-version-info { gap: 8px 20px; }
+.drawer .drawer-version-info span { margin-bottom: 2px; font-size: 14px; }
+.drawer .drawer-version-info strong { font-size: 16px; }
+.drawer .drawer-body { display: flex; flex-direction: column; padding-bottom: 16px; }
+.drawer .drawer-col > .section:first-child { margin-top: 14px; }
+.drawer .section h3 { margin-bottom: 8px; }
+.drawer .project-intro { font-size: 18px; line-height: 1.45; }
+.drawer .shot-slide { aspect-ratio: 16 / 9; height: auto; }
+.drawer .shot-slideshow { gap: 8px; }
+.drawer .gallery-hint { margin-top: 2px; }
+
+/* 紧凑标题和轮播说明，保留全宽图片。 */
+.drawer .drawer-header { padding-top: 14px; padding-bottom: 14px; }
+.drawer .drawer-heading h2 { margin-top: 0; margin-bottom: 8px; }
+.drawer .drawer-version-info { row-gap: 5px; }
+.drawer .drawer-col > .section:first-child { margin-top: 10px; }
+.drawer .section h3 { margin-bottom: 7px; }
+.drawer .gallery-heading-hint { margin-left: 16px; color: var(--weak); font-size: 14px; font-weight: 400; }
+.drawer .shot-slideshow { gap: 6px; }
+
+/* 语音唤醒状态保持可见，关闭即停止监听。 */
+.agent-voice-control { position: absolute; right: 8px; top: 8px; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: auto; max-width: 270px; }
+.agent-voice-control button { border: 1px solid #3b526e; border-radius: 8px; background: #172338; color: #c9d9ec; padding: 7px 10px; font-size: 13px; }
+.agent-voice-control button.active { border-color: #22b8c9; color: #a9f2ef; }
+.agent-voice-control span { color: #c1d5e5; background: rgba(15,21,34,.9); border-radius: 6px; padding: 4px 7px; font-size: 12px; text-align: right; }

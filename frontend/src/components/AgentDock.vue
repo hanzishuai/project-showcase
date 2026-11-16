@@ -28,6 +28,13 @@
       @error="onError"
     />
 
+    <div v-if="!collapsed" class="agent-voice-control">
+      <button type="button" :class="{ active: voiceEnabled }" @click="toggleVoice">
+        {{ voiceEnabled ? '关闭语音监听' : '开启语音唤醒' }}
+      </button>
+      <span role="status">{{ voiceMessage }}</span>
+    </div>
+
     <!-- 收起 / 展开（看板页不使用：那里是页面布局的一部分） -->
     <button
       v-if="!isBoard"
@@ -66,6 +73,7 @@ import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-av
 import { agentFetch } from '../agent/fetch'
 import { setActionFailureHandler } from '../agent/bus'
 import { uiState } from '../agent/uiState'
+import { createVoiceLoop, WAKE_PHRASE, type VoiceStatus } from '../agent/voiceLoop'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
@@ -75,16 +83,18 @@ interface ChatLike {
   busy?: { value: boolean }
   speaking?: { value: boolean }
   interrupt?: () => void
+  ask?: (text: string) => Promise<unknown>
+  primeAudio?: () => Promise<unknown>
 }
 
 const avatarRef = ref<{ chat?: ChatLike } | null>(null)
 // 直接打开后台/编辑页时也默认收起（不依赖页面切换事件）
-const collapsed = ref(props.page !== 'kanban')
+const collapsed = ref(props.page !== 'kanban' || uiState.boardView !== 'board')
 const boardRect = ref({ left: 0, top: 0, scale: 1 })
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight })
 const characterSrc = DEFAULT_CHARACTER_SRC as string
 
-const isBoard = computed(() => props.page === 'kanban')
+const isBoard = computed(() => props.page === 'kanban' && uiState.boardView === 'board')
 
 const FLOAT_WIDTH = 380
 const FLOAT_HEIGHT = 620
@@ -150,6 +160,96 @@ const observeApp = () => {
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
 
+const voiceStatus = ref<VoiceStatus>('off')
+const voiceError = ref('')
+const voiceReply = ref('')
+const voiceEnabled = ref(false)
+let lastBusyAt = 0
+const voiceLoop = createVoiceLoop({
+  onStatus(status, detail) {
+    voiceStatus.value = status
+    voiceReply.value = status === 'answering' ? (detail || '') : ''
+    if (status === 'error') { voiceEnabled.value = false; voiceError.value = detail || '语音不可用' }
+  },
+  shouldPause() {
+    const chat = avatarRef.value?.chat
+    if (chat?.busy?.value || chat?.speaking?.value || dockEl.value?.querySelector('.pp7-chat-recording')) {
+      lastBusyAt = Date.now()
+      return true
+    }
+    return Date.now() - lastBusyAt < 800
+  },
+  async onAcknowledge(text, signal) {
+    const response = await fetch('/api/v1/rag/tts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }), signal
+    })
+    if (!response.ok) throw new Error('语音播报服务不可用（' + response.status + '）')
+    const audioUrl = URL.createObjectURL(await response.blob())
+    const audio = new Audio(audioUrl)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => { audio.pause(); reject(new DOMException('已停止', 'AbortError')) }
+        if (signal.aborted) { abort(); return }
+        signal.addEventListener('abort', abort, { once: true })
+        audio.onended = () => { signal.removeEventListener('abort', abort); resolve() }
+        audio.onerror = () => { signal.removeEventListener('abort', abort); reject(new Error('语音播放失败')) }
+        audio.play().catch((error) => { signal.removeEventListener('abort', abort); reject(error) })
+      })
+    } finally { URL.revokeObjectURL(audioUrl); lastBusyAt = Date.now() }
+  },
+  async onQuestion(text, signal) {
+    const chat = avatarRef.value?.chat
+    if (!chat?.ask) throw new Error('助手尚未准备好')
+    let interrupted: string | null = null
+    const listener = createVoiceLoop({
+      onStatus(status, detail) {
+        if (status === 'error') {
+          voiceReply.value = '语音打断不可用：' + (detail || '请检查麦克风')
+          console.warn('[voice-interrupt]', detail)
+        }
+      },
+      shouldPause: () => false,
+      onWakeDetected(command) {
+        interrupted = command
+        listener.stop()
+        chat.interrupt?.()
+      },
+      onQuestion: async () => {},
+      onAcknowledge: async () => {}
+    })
+    const stopListener = () => listener.stop()
+    signal.addEventListener('abort', stopListener, { once: true })
+    listener.start()
+    try {
+      if (!signal.aborted) await chat.ask(text)
+    } finally {
+      signal.removeEventListener('abort', stopListener)
+      listener.stop()
+      lastBusyAt = Date.now()
+    }
+    return interrupted
+  }
+})
+const voiceMessage = computed(() => {
+  switch (voiceStatus.value) {
+    case 'wake': return '等待唤醒：说“' + WAKE_PHRASE + '”'
+    case 'listening': return '连续对话中，请说话'
+    case 'recognizing': return '正在识别…'
+    case 'answering': return voiceReply.value || '助手回答中…'
+    case 'error': return voiceError.value
+    default: return '开启后语音将发送至识别服务'
+  }
+})
+const toggleVoice = () => {
+  if (voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop(); return }
+  voiceError.value = ''
+  voiceEnabled.value = true
+  void avatarRef.value?.chat?.primeAudio?.()
+  voiceLoop.start()
+}
+
+
 /**
  * 语音打断（barge-in）：数字人还在播报或回答时点麦克风，先中断当前回答，
  * 再开始录音——否则麦克风会把数字人自己的声音录进去。
@@ -157,6 +257,7 @@ const onError = (message: string) => console.warn('[rag-avatar]', message)
 const onClickCapture = (event: MouseEvent): void => {
   const target = event.target as HTMLElement | null
   if (!target || !target.closest('.pp7-chat-mic')) return
+  if (voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop() }
   const chat = avatarRef.value?.chat
   if (!chat?.interrupt) return
   if (chat.speaking?.value || chat.busy?.value) {
@@ -164,12 +265,16 @@ const onClickCapture = (event: MouseEvent): void => {
   }
 }
 
+watch(collapsed, (hidden) => {
+  if (hidden && voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop() }
+})
+
 watch(
-  () => props.page,
-  async (next) => {
+  () => [props.page, isBoard.value] as const,
+  async ([, board]) => {
     // 后台/编辑页内容较满：默认收起成气泡；回看板时恢复完整数字人
     // （看板页没有展开按钮，收起状态下数字人会一直不显示，必须重置）
-    collapsed.value = next !== 'kanban'
+    collapsed.value = !board
     observedApp = null
     await nextTick()
     measure()
@@ -199,6 +304,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  voiceLoop.stop()
   setActionFailureHandler(null)
   window.removeEventListener('resize', measure)
   appObserver?.disconnect()
