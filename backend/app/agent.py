@@ -336,8 +336,8 @@ async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_
         "tools": TOOLS,
         "tool_choice": "auto",
         "stream": True,
-        "temperature": 0.2,
-        "max_tokens": 400,
+        "temperature": settings.llm_temperature,
+        "max_tokens": settings.llm_max_tokens,
     }
     collected: dict[int, dict] = {}
     client = _http_client_instance()

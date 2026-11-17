@@ -58,7 +58,7 @@ class TTSError(Exception):
 
 
 def _api_key() -> str:
-    return settings.dashscope_api_key or settings.omni_api_key
+    return settings.tts_api_key or settings.dashscope_api_key or settings.omni_api_key
 
 
 def is_configured() -> bool:
@@ -160,7 +160,7 @@ async def _stream_pcm(text: str, voice: str, speed: float | None = None):
     session = await get_tts_session()
     try:
         async with session.post(
-            TTS_URL,
+            settings.tts_base_url,
             json=payload,
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=60, sock_read=10),

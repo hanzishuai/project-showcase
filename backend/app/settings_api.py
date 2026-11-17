@@ -41,6 +41,15 @@ EDITABLE: dict[str, dict[str, Any]] = {
         "group": "语言模型", "label": "API Key", "type": "password", "secret": True,
         "hint": "留空表示不修改",
     },
+    "llm_fallback_base_url": {"group": "备用语言模型", "label": "API 地址", "type": "text", "hint": "OpenAI 兼容接口地址"},
+    "llm_fallback_model": {"group": "备用语言模型", "label": "模型", "type": "text"},
+    "llm_fallback_api_key": {"group": "备用语言模型", "label": "API Key", "type": "password", "secret": True, "hint": "留空表示不修改"},
+    "llm_max_tokens": {"group": "语言模型", "label": "最大输出 Token", "type": "number"},
+    "llm_temperature": {"group": "语言模型", "label": "温度", "type": "number", "hint": "0–2"},
+    "tts_base_url": {"group": "语音合成", "label": "请求地址", "type": "text", "hint": "百炼兼容的 TTS HTTP 接口完整地址"},
+    "tts_api_key": {"group": "语音合成", "label": "API Key", "type": "password", "secret": True, "hint": "留空时使用共用百炼密钥"},
+    "asr_base_url": {"group": "语音识别", "label": "请求地址", "type": "text", "hint": "百炼兼容的实时识别 WebSocket 地址"},
+    "asr_api_key": {"group": "语音识别", "label": "API Key", "type": "password", "secret": True, "hint": "留空时使用共用百炼密钥"},
     "tts_model": {
         "group": "语音合成", "label": "TTS 模型", "type": "text", "secret": False,
         "hint": "例如 qwen3-tts-flash",
@@ -79,7 +88,7 @@ EDITABLE: dict[str, dict[str, Any]] = {
     },
 }
 
-_PROTECTED = {"llm_api_key", "dashscope_api_key"}
+_PROTECTED = {key for key, meta in EDITABLE.items() if meta.get("secret")}
 
 
 def _mask(value: str) -> str:
@@ -181,6 +190,7 @@ async def update_settings(payload: SettingsUpdate) -> dict:
 
     overrides = _read_overrides()
     applied: list[str] = []
+    pending: dict[str, Any] = {}
     for key, value in values.items():
         if value is None:
             continue
@@ -193,15 +203,19 @@ async def update_settings(payload: SettingsUpdate) -> dict:
             converted = _coerce(key, value)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"{EDITABLE[key]['label']} 的取值不合法")
-        if key == "llm_base_url":
+        if key in {"llm_base_url", "llm_fallback_base_url", "tts_base_url", "asr_base_url"}:
             base = str(converted).strip()
-            if not (base.startswith("https://") or base.startswith("http://")):
-                raise HTTPException(status_code=400, detail="API 地址必须以 http:// 或 https:// 开头")
+            if not base.startswith(("ws://", "wss://") if key == "asr_base_url" else ("http://", "https://")):
+                raise HTTPException(status_code=400, detail=f"{EDITABLE[key]['label']} 的协议不正确")
         if key == "rag_top_k":
             converted = max(1, min(10, int(converted)))
         if key == "rag_reference_max_chars":
             converted = max(100, min(4000, int(converted)))
-        setattr(settings, key, converted)
+        if key == "llm_temperature" and not 0 <= converted <= 2:
+            raise HTTPException(status_code=400, detail="温度必须在 0–2 之间")
+        if key == "llm_max_tokens" and not 1 <= converted <= 32768:
+            raise HTTPException(status_code=400, detail="最大输出 Token 必须在 1–32768 之间")
+        pending[key] = converted
         overrides[key] = converted
         applied.append(key)
 
@@ -210,6 +224,11 @@ async def update_settings(payload: SettingsUpdate) -> dict:
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"写入配置文件失败：{exc}")
 
+    if any(key.startswith("tts_") for key in applied):
+        from pp7rag.ragapi.providers import tts
+        tts._cache.clear()
+    for key, value in pending.items():
+        setattr(settings, key, value)
     logger.warning("settings_updated: %s", ", ".join(applied))
     return {"ok": True, "applied": applied}
 
@@ -270,4 +289,17 @@ async def test_connection(payload: TestRequest) -> dict:
             "ms": int((time.perf_counter() - started) * 1000),
         }
 
-    raise HTTPException(status_code=400, detail="target 只支持 llm / tts")
+    if target == "asr":
+        try:
+            from pp7rag.ragapi.providers import asr
+            from pp7rag.ragapi.providers.http import get_session
+            if not asr.is_configured():
+                raise ValueError("未配置语音识别密钥")
+            session = await get_session()
+            async with session.ws_connect(f"{settings.asr_base_url}?model={settings.asr_model}", headers={"Authorization": f"Bearer {asr._api_key()}"}, timeout=15) as ws:
+                await asr._wait_for(ws, {"session.created"}, 10)
+            return {"ok": True, "target": target, "message": f"识别模型 {settings.asr_model} 连接成功", "ms": int((time.perf_counter() - started) * 1000)}
+        except Exception:
+            return {"ok": False, "target": target, "message": "语音识别连接失败，请检查地址、模型和密钥", "ms": int((time.perf_counter() - started) * 1000)}
+
+    raise HTTPException(status_code=400, detail="target 只支持 llm / tts / asr")
