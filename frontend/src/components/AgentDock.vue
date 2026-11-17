@@ -42,7 +42,7 @@
       class="agent-dock__toggle"
       :title="collapsed ? '展开助手' : '收起助手'"
       :aria-label="collapsed ? '展开助手' : '收起助手'"
-      @click="collapsed = !collapsed"
+      @click="toggleCollapsed"
     >
       {{ collapsed ? '🎙' : '—' }}
     </button>
@@ -51,8 +51,9 @@
       v-if="!isBoard && collapsed"
       type="button"
       class="agent-dock__bubble"
-      title="展开项目助手"
-      aria-label="展开项目助手"
+      :class="{ 'voice-active': voiceEnabled }"
+      :title="voiceEnabled ? voiceMessage + ' · 点击展开助手' : '展开项目助手'"
+      :aria-label="voiceEnabled ? '展开项目助手（正在监听麦克风）' : '展开项目助手'"
       @click="collapsed = false"
     >
       <img :src="characterSrc" alt="" />
@@ -70,10 +71,10 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
-import { agentFetch } from '../agent/fetch'
+import { agentFetch, clearAgentHistory } from '../agent/fetch'
 import { setActionFailureHandler } from '../agent/bus'
 import { uiState } from '../agent/uiState'
-import { createVoiceLoop, WAKE_PHRASE, type VoiceStatus } from '../agent/voiceLoop'
+import { createVoiceLoop, INTERRUPT_PHRASE, WAKE_PHRASE, type VoiceStatus } from '../agent/voiceLoop'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
@@ -164,20 +165,18 @@ const voiceStatus = ref<VoiceStatus>('off')
 const voiceError = ref('')
 const voiceReply = ref('')
 const voiceEnabled = ref(false)
-let lastBusyAt = 0
 const voiceLoop = createVoiceLoop({
   onStatus(status, detail) {
     voiceStatus.value = status
     voiceReply.value = status === 'answering' ? (detail || '') : ''
     if (status === 'error') { voiceEnabled.value = false; voiceError.value = detail || '语音不可用' }
   },
-  shouldPause() {
+  isAssistantBusy() {
     const chat = avatarRef.value?.chat
-    if (chat?.busy?.value || chat?.speaking?.value || dockEl.value?.querySelector('.pp7-chat-recording')) {
-      lastBusyAt = Date.now()
-      return true
-    }
-    return Date.now() - lastBusyAt < 800
+    return !!(chat?.busy?.value || chat?.speaking?.value)
+  },
+  onInterrupt() {
+    avatarRef.value?.chat?.interrupt?.()
   },
   async onAcknowledge(text, signal) {
     const response = await fetch('/api/v1/rag/tts', {
@@ -196,39 +195,12 @@ const voiceLoop = createVoiceLoop({
         audio.onerror = () => { signal.removeEventListener('abort', abort); reject(new Error('语音播放失败')) }
         audio.play().catch((error) => { signal.removeEventListener('abort', abort); reject(error) })
       })
-    } finally { URL.revokeObjectURL(audioUrl); lastBusyAt = Date.now() }
+    } finally { URL.revokeObjectURL(audioUrl) }
   },
   async onQuestion(text, signal) {
     const chat = avatarRef.value?.chat
     if (!chat?.ask) throw new Error('助手尚未准备好')
-    let interrupted: string | null = null
-    const listener = createVoiceLoop({
-      onStatus(status, detail) {
-        if (status === 'error') {
-          voiceReply.value = '语音打断不可用：' + (detail || '请检查麦克风')
-          console.warn('[voice-interrupt]', detail)
-        }
-      },
-      shouldPause: () => false,
-      onWakeDetected(command) {
-        interrupted = command
-        listener.stop()
-        chat.interrupt?.()
-      },
-      onQuestion: async () => {},
-      onAcknowledge: async () => {}
-    })
-    const stopListener = () => listener.stop()
-    signal.addEventListener('abort', stopListener, { once: true })
-    listener.start()
-    try {
-      if (!signal.aborted) await chat.ask(text)
-    } finally {
-      signal.removeEventListener('abort', stopListener)
-      listener.stop()
-      lastBusyAt = Date.now()
-    }
-    return interrupted
+    if (!signal.aborted) await chat.ask(text)
   }
 })
 const voiceMessage = computed(() => {
@@ -236,7 +208,7 @@ const voiceMessage = computed(() => {
     case 'wake': return '等待唤醒：说“' + WAKE_PHRASE + '”'
     case 'listening': return '连续对话中，请说话'
     case 'recognizing': return '正在识别…'
-    case 'answering': return voiceReply.value || '助手回答中…'
+    case 'answering': return voiceReply.value || '助手回答中 · 说“' + INTERRUPT_PHRASE + '”打断'
     case 'error': return voiceError.value
     default: return '开启后语音将发送至识别服务'
   }
@@ -256,7 +228,9 @@ const toggleVoice = () => {
  */
 const onClickCapture = (event: MouseEvent): void => {
   const target = event.target as HTMLElement | null
-  if (!target || !target.closest('.pp7-chat-mic')) return
+  if (!target) return
+  if (target.closest('button[title="清空对话"]')) clearAgentHistory()
+  if (!target.closest('.pp7-chat-mic')) return
   if (voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop() }
   const chat = avatarRef.value?.chat
   if (!chat?.interrupt) return
@@ -265,9 +239,10 @@ const onClickCapture = (event: MouseEvent): void => {
   }
 }
 
-watch(collapsed, (hidden) => {
-  if (hidden && voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop() }
-})
+const toggleCollapsed = () => {
+  collapsed.value = !collapsed.value
+  if (collapsed.value && voiceEnabled.value) toggleVoice()
+}
 
 watch(
   () => [props.page, isBoard.value] as const,

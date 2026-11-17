@@ -10,9 +10,9 @@ export async function refreshGlobalContext(): Promise<void> {
         sessions: Number(data.total_sessions ?? 0),
         documents: Number(data.total_documents ?? 0)
       }
-    }
+    } else { uiState.adminStats = null }
   } catch {
-    // 忽略：不影响页面
+    uiState.adminStats = null
   }
   try {
     const response = await fetch('/api/v1/rag/knowledge/documents')

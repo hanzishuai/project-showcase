@@ -3741,6 +3741,10 @@ function createWavRecorder(options = {}) {
           autoGainControl: true
         }
       });
+      if (closed) {
+        for (const track of mediaStream.getTracks()) track.stop();
+        return;
+      }
       stream = mediaStream;
       const Ctor = getAudioContextCtor$1();
       if (!Ctor) throw new RagError("当前环境不支持 Web Audio", "unsupported");
@@ -3757,6 +3761,7 @@ function createWavRecorder(options = {}) {
         } catch {
         }
       }
+      if (closed) return;
       nativeSampleRate = ctx.sampleRate;
       chunks = [];
       streamPending = new Int16Array(0);
@@ -3771,7 +3776,7 @@ function createWavRecorder(options = {}) {
         var _a;
         if (!started) return;
         const input = event.inputBuffer.getChannelData(0);
-        chunks.push(new Float32Array(input));
+        if (!options.streamOnly) chunks.push(new Float32Array(input));
         if (options.onPcmChunk) {
           emitStreamSamples(float32ToInt16(downsampleBuffer(input, nativeSampleRate, targetSampleRate)));
         }

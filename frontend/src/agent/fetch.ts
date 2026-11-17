@@ -31,6 +31,12 @@ function loadHistory(): Turn[] {
 }
 
 const history: Turn[] = loadHistory()
+let historyGeneration = 0
+export function clearAgentHistory(): void {
+  historyGeneration++
+  history.length = 0
+  saveHistory()
+}
 
 function saveHistory(): void {
   try {
@@ -63,6 +69,8 @@ async function consumeStream(stream: ReadableStream<Uint8Array>, question: strin
   let buffer = ''
   let eventName = ''
   let answer = ''
+  let completed = false
+  const generation = historyGeneration
   try {
     for (;;) {
       const { done, value } = await reader.read()
@@ -83,11 +91,21 @@ async function consumeStream(stream: ReadableStream<Uint8Array>, question: strin
               const action = JSON.parse(payload) as AgentAction
               void dispatchAction(action, signal).then(async outcome => {
                 if (!action.action_id || signal?.aborted) return
-                await fetch('/api/v1/agent/action-result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action_id: action.action_id, ...outcome }), signal })
-              }).catch(() => {})
+                const receipt = await fetch('/api/v1/agent/action-result', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action_id: action.action_id, ...outcome }),
+                  signal
+                })
+                if (!receipt.ok) throw new Error('HTTP ' + receipt.status)
+              }).catch(error => {
+                if (!signal?.aborted) console.warn('[agent] 操作回执未送达', error)
+              })
             } catch {
               // 忽略坏帧
             }
+          } else if (eventName === 'done') {
+            completed = true
           } else if (eventName === 'token') {
             try {
               answer += String(JSON.parse(payload)?.text ?? '')
@@ -103,7 +121,7 @@ async function consumeStream(stream: ReadableStream<Uint8Array>, question: strin
     // 流被中断（用户打断）时静默结束
   } finally {
     reader.releaseLock()
-    if (answer.trim()) {
+    if (completed && !signal?.aborted && generation === historyGeneration && answer.trim()) {
       pushTurn('user', question)
       pushTurn('assistant', answer)
     }

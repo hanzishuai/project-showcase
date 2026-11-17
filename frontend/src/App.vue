@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import KanbanPage from './views/KanbanPage.vue'
 import DataEditPage from './views/DataEditPage.vue'
 import AdminPage from './admin/AdminPage.vue'
@@ -49,7 +49,8 @@ onMounted(() => {
       const hash = PAGE_HASH[page]
       if (!hash) return false
       window.location.hash = hash
-      for (let i = 0; i < 40 && route.value !== (page === 'board' ? 'kanban' : page); i++) await new Promise(resolve => setTimeout(resolve, 50))
+      syncRoute()
+      await nextTick()
       return route.value === (page === 'board' ? 'kanban' : page) ? `已切换至${page === 'board' ? '生命周期看板' : page === 'edit' ? '数据修改' : '管理后台'}` : false
     }),
     // 同时处理「跳到后台 + 指定页签」，避免依赖 AdminPage 的挂载时机
@@ -60,7 +61,8 @@ onMounted(() => {
       if (!access.ok) throw new Error(access.status === 401 ? '请先输入管理员口令' : '无法访问管理后台')
       uiState.adminTab = tab as typeof uiState.adminTab
       window.location.hash = '#/admin'
-      for (let i = 0; i < 40 && route.value !== 'admin'; i++) await new Promise(resolve => setTimeout(resolve, 50))
+      syncRoute()
+      await nextTick()
       return route.value === 'admin' ? `已打开管理后台${tab}` : false
     }),
     registerAction('confirm_board_change', async (args) => {

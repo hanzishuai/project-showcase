@@ -36,6 +36,9 @@ const historyOnly = ref(false)
 const selected = ref<VersionView | null>(null)
 const galleryIndex = ref(-1)
 const slideIndex = ref(0)
+const slideVideo = ref<HTMLVideoElement | null>(null)
+const galleryVideo = ref<HTMLVideoElement | null>(null)
+const mediaPlaying = ref(false)
 let slideshowTimer: number | null = null
 
 let charts: echarts.ECharts[] = []
@@ -279,6 +282,7 @@ const showOverview = async () => {
 }
 
 watch(activeView, showOverview)
+watch([slideIndex, galleryIndex], () => { mediaPlaying.value = false })
 
 /* ---------------------- Agent：把看板操作暴露给数字人 ---------------------- */
 
@@ -290,7 +294,7 @@ const setupAgentActions = () => {
       const view = String(args.view ?? 'board')
       if (view !== 'board' && view !== 'overview') return false
       switchView(view)
-      return true
+      return view === 'overview' ? '已切换到数据总览' : '已切换到生命周期看板'
     }),
     registerAction('filter_board', (args) => {
       const project = String(args.project ?? '')
@@ -309,7 +313,10 @@ const setupAgentActions = () => {
       const name = String(args.project ?? '').trim()
       const version = String(args.version ?? '').trim()
       if (!name) return false
-      const matched = versions.filter((item) => item.project.name === name || item.project.name.includes(name) || name.includes(item.project.name))
+      const exact = versions.filter(item => item.project.name === name)
+      const matched = exact.length
+        ? exact
+        : versions.filter(item => item.project.name.includes(name) || name.includes(item.project.name))
       const names = new Set(matched.map(item => item.project.name))
       if (names.size > 1) throw new Error('项目名称不唯一，请提供完整名称')
       const target = version ? matched.find(item => item.number === version) : matched.find(item => item.current)
@@ -346,6 +353,19 @@ const setupAgentActions = () => {
       stepGallery(Number(args.delta) >= 0 ? 1 : -1)
       return true
     }),
+    registerAction('control_video', async (args) => {
+      const media = galleryOpen.value ? galleryMedia.value[galleryIndex.value] : currentMedia.value
+      if (!selected.value || media?.type !== 'video') throw new Error('当前展示的不是视频，请先切换到视频')
+      const video = galleryOpen.value ? galleryVideo.value : slideVideo.value
+      if (!video) throw new Error('视频尚未加载，请稍后重试')
+      const action = String(args.action || '')
+      if (action === 'pause') { video.pause(); mediaPlaying.value = false; return '视频已暂停' }
+      if (action !== 'play') throw new Error('不支持的视频操作')
+      try { await video.play() } catch { throw new Error('视频未能播放，请检查视频地址或点击播放按钮') }
+      if (video.paused) throw new Error('视频未能播放，请点击播放按钮')
+      mediaPlaying.value = true
+      return '视频已开始播放'
+    }),
     registerAction('close_gallery', () => {
       closeGallery()
       return true
@@ -362,24 +382,14 @@ watchEffect(() => {
   uiState.openProject = selected.value?.project.name ?? ''
   uiState.openVersion = selected.value?.number ?? ''
   uiState.slideIndex = selected.value ? slideIndex.value : -1
+  const shownMedia = galleryOpen.value ? galleryMedia.value[galleryIndex.value] : currentMedia.value
+  uiState.mediaType = selected.value ? (shownMedia?.type ?? '') : ''
+  uiState.mediaPlaying = uiState.mediaType === 'video' && mediaPlaying.value
   uiState.modalOpen = galleryOpen.value
   uiState.galleryOpen = galleryOpen.value
   uiState.galleryIndex = galleryIndex.value
   uiState.visibleCards = filteredVersions.value.length
-  uiState.boardProjects = KANBAN_PROJECTS.map((project) => {
-    const current = versions.find((item) => item.project.name === project.name && item.current)
-    return {
-      name: project.name,
-      version: current?.number ?? '',
-      stage: current ? KANBAN_STAGES[current.stage]?.name ?? '' : '',
-      advisor: project.owner,
-      stack: project.stack.join('·'),
-      team: project.team,
-      users: project.users,
-      features: project.features
-    }
-  })
-  uiState.projects = projectNames
+
 })
 
 onMounted(() => {
@@ -596,6 +606,8 @@ onBeforeUnmount(() => {
                     <video
                       v-if="currentMedia?.type === 'video'"
                       :key="'vid-' + slideIndex"
+                      ref="slideVideo"
+                      @play="mediaPlaying = true" @pause="mediaPlaying = false" @ended="mediaPlaying = false"
                       class="shot-slide-img shot-slide-video"
                       :src="currentMedia.src"
                       controls
@@ -653,6 +665,8 @@ onBeforeUnmount(() => {
         <video
           v-if="galleryMedia[galleryIndex]?.type === 'video'"
           :key="'lv-' + galleryIndex"
+          ref="galleryVideo"
+          @play="mediaPlaying = true" @pause="mediaPlaying = false" @ended="mediaPlaying = false"
           class="lightbox-video"
           :src="galleryMedia[galleryIndex].src"
           controls
