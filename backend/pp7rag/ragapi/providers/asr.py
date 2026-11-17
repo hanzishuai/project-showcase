@@ -30,7 +30,7 @@ class ASRError(Exception):
 
 
 def _api_key() -> str:
-    return settings.dashscope_api_key or settings.omni_api_key
+    return settings.asr_api_key or settings.dashscope_api_key or settings.omni_api_key
 
 
 def is_configured() -> bool:
@@ -78,7 +78,7 @@ async def transcribe(audio: bytes, *, timeout_s: float = 40.0) -> str:
     if len(pcm) % 2:
         pcm = pcm[:-1]
 
-    url = f"{REALTIME_URL}?model={settings.asr_model or DEFAULT_MODEL}"
+    url = f"{settings.asr_base_url}?model={settings.asr_model or DEFAULT_MODEL}"
     headers = {"Authorization": f"Bearer {_api_key()}"}
     transcripts: list[str] = []
 
@@ -152,7 +152,7 @@ class StreamingTranscriber:
     async def open(self) -> None:
         if not is_configured():
             raise ASRError("未配置语音识别密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
-        url = f"{REALTIME_URL}?model={settings.asr_model or DEFAULT_MODEL}"
+        url = f"{settings.asr_base_url}?model={settings.asr_model or DEFAULT_MODEL}"
         headers = {"Authorization": f"Bearer {_api_key()}"}
         http = await get_session()
         try:

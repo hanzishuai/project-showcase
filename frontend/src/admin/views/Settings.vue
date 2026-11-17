@@ -44,6 +44,7 @@
           <a-button type="primary" :loading="saving" @click="save">保存设置</a-button>
           <a-button :loading="testing === 'llm'" @click="test('llm')">测试语言模型</a-button>
           <a-button :loading="testing === 'tts'" @click="test('tts')">测试语音合成</a-button>
+          <a-button :loading="testing === 'asr'" @click="test('asr')">测试语音识别</a-button>
           <a-button @click="load">重新读取</a-button>
         </a-space>
         <p class="note">{{ note }}</p>
@@ -136,7 +137,7 @@ async function save(): Promise<void> {
   }
 }
 
-async function test(target: 'llm' | 'tts'): Promise<void> {
+async function test(target: 'llm' | 'tts' | 'asr'): Promise<void> {
   testing.value = target
   try {
     const response = await fetch('/api/admin/settings/test', {
