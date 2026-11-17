@@ -58,7 +58,7 @@ class TTSError(Exception):
 
 
 def _api_key() -> str:
-    return settings.tts_api_key or settings.dashscope_api_key or settings.omni_api_key
+    return settings.tts_api_key
 
 
 def is_configured() -> bool:
@@ -145,7 +145,7 @@ async def _stream_pcm(text: str, voice: str, speed: float | None = None):
     already comes back at the requested rate, so no client-side resampling.
     """
     if not _api_key():
-        raise TTSError("未配置语音合成密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
+        raise TTSError("未配置语音合成密钥（TTS_API_KEY）。")
     payload = {
         "model": settings.tts_model or "qwen3-tts-flash",
         "input": {"text": text, "voice": voice},
@@ -203,7 +203,7 @@ async def _stream_pcm(text: str, voice: str, speed: float | None = None):
 async def synthesize_stream(text: str, voice: str | None = None, speed: float | None = None):
     """Yield raw 24 kHz mono 16-bit PCM chunks as they are synthesized."""
     if not is_configured():
-        raise TTSError("未配置语音合成密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
+        raise TTSError("未配置语音合成密钥（TTS_API_KEY）。")
     content = _normalize_text(text)
     target_voice = _voice(voice)
     rate = round(float(speed), 2) if speed else 1.0
@@ -247,7 +247,7 @@ async def synthesize_stream(text: str, voice: str | None = None, speed: float | 
 async def synthesize(text: str, voice: str | None = None, speed: float | None = None) -> bytes:
     """Synthesize one sentence into WAV bytes."""
     if not is_configured():
-        raise TTSError("未配置语音合成密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
+        raise TTSError("未配置语音合成密钥（TTS_API_KEY）。")
     content = _normalize_text(text)
     target_voice = _voice(voice)
     rate = round(float(speed), 2) if speed else 1.0

@@ -30,7 +30,7 @@ class ASRError(Exception):
 
 
 def _api_key() -> str:
-    return settings.asr_api_key or settings.dashscope_api_key or settings.omni_api_key
+    return settings.asr_api_key
 
 
 def is_configured() -> bool:
@@ -70,7 +70,7 @@ async def _wait_for(ws: aiohttp.ClientWebSocketResponse, expected: set[str], tim
 async def transcribe(audio: bytes, *, timeout_s: float = 40.0) -> str:
     """Transcribe WAV (16 kHz mono 16-bit) audio into text."""
     if not is_configured():
-        raise ASRError("未配置语音识别密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
+        raise ASRError("未配置语音识别密钥（ASR_API_KEY）。")
 
     pcm = wav_to_pcm(audio) if audio[:4] == b"RIFF" else audio
     if not pcm:
@@ -151,7 +151,7 @@ class StreamingTranscriber:
 
     async def open(self) -> None:
         if not is_configured():
-            raise ASRError("未配置语音识别密钥（DASHSCOPE_API_KEY / TTS_API_KEY）。")
+            raise ASRError("未配置语音识别密钥（ASR_API_KEY）。")
         url = f"{settings.asr_base_url}?model={settings.asr_model or DEFAULT_MODEL}"
         headers = {"Authorization": f"Bearer {_api_key()}"}
         http = await get_session()
