@@ -72,6 +72,25 @@ async def transcribe(audio: bytes, *, timeout_s: float = 40.0) -> str:
     if not is_configured():
         raise ASRError("未配置语音识别密钥（ASR_API_KEY）。")
 
+    if settings.asr_protocol == "openai":
+        if audio[:4] != b"RIFF":
+            buffer = io.BytesIO()
+            with wave.open(buffer, "wb") as wav:
+                wav.setnchannels(1); wav.setsampwidth(2); wav.setframerate(SAMPLE_RATE); wav.writeframes(audio)
+            audio = buffer.getvalue()
+        form = aiohttp.FormData()
+        form.add_field("model", settings.asr_model)
+        form.add_field("file", audio, filename="audio.wav", content_type="audio/wav")
+        http = await get_session()
+        try:
+            async with http.post(settings.asr_base_url, data=form, headers={"Authorization": f"Bearer {_api_key()}"}, timeout=aiohttp.ClientTimeout(total=timeout_s)) as response:
+                if response.status >= 400:
+                    raise ASRError(f"语音识别请求失败（HTTP {response.status}）")
+                return str((await response.json()).get("text") or "").strip()
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            raise ASRError("语音识别连接失败或超时。") from exc
+    if settings.asr_protocol != "dashscope":
+        raise ASRError("不支持的语音识别协议。")
     pcm = wav_to_pcm(audio) if audio[:4] == b"RIFF" else audio
     if not pcm:
         raise ASRError("音频内容为空。")
@@ -243,3 +262,47 @@ class StreamingTranscriber:
             except Exception:  # pragma: no cover - best effort
                 pass
         self._ws = None
+
+
+class BatchTranscriber:
+    """Use bounded rolling uploads to expose partial text for batch-only APIs."""
+    def __init__(self, *, on_partial=None):
+        self._chunks = bytearray()
+        self._on_partial = on_partial
+        self._partial_task = None
+        self._last_samples = 0
+        self._closed = False
+    async def open(self):
+        if not is_configured():
+            raise ASRError("未配置语音识别密钥。")
+    async def _recognize_partial(self, audio):
+        try:
+            text = await transcribe(audio, timeout_s=8)
+            if text and not self._closed and self._on_partial:
+                self._on_partial(text)
+        except (ASRError, asyncio.CancelledError):
+            pass
+    async def push(self, pcm):
+        self._chunks.extend(pcm)
+        # Limit concurrent uploads and avoid resubmitting for every audio frame.
+        if len(self._chunks) - self._last_samples >= SAMPLE_RATE * 2 * 2 and (self._partial_task is None or self._partial_task.done()):
+            self._last_samples = len(self._chunks)
+            self._partial_task = asyncio.create_task(self._recognize_partial(bytes(self._chunks)))
+    async def finish(self):
+        if self._partial_task and not self._partial_task.done():
+            self._partial_task.cancel()
+            await asyncio.gather(self._partial_task, return_exceptions=True)
+        return await transcribe(bytes(self._chunks))
+    async def close(self):
+        self._closed = True
+        if self._partial_task and not self._partial_task.done():
+            self._partial_task.cancel()
+            await asyncio.gather(self._partial_task, return_exceptions=True)
+        self._chunks.clear()
+
+def create_transcriber(*, on_partial=None):
+    if settings.asr_protocol == "openai":
+        return BatchTranscriber(on_partial=on_partial)
+    if settings.asr_protocol == "dashscope":
+        return StreamingTranscriber(on_partial=on_partial)
+    raise ASRError("不支持的语音识别协议。")

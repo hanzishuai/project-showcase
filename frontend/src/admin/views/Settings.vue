@@ -54,7 +54,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { uiState } from '../../agent/uiState'
 import { Message } from '@arco-design/web-vue'
 
 interface SettingItem {
@@ -156,6 +157,12 @@ async function test(target: 'llm' | 'tts' | 'asr'): Promise<void> {
   }
 }
 
+watchEffect(() => {
+  uiState.adminPageContext = { page: 'settings', groups: groups.value.map(group => ({
+    name: group.name, items: group.items.map(item => ({ label: item.label, configured: item.configured, secret: item.secret }))
+  })) }
+})
+onBeforeUnmount(() => { uiState.adminPageContext = null })
 onMounted(load)
 </script>
 

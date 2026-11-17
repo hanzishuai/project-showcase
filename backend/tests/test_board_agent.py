@@ -123,6 +123,7 @@ def test_agent_still_answers_when_retrieval_fails(client, monkeypatch):
     monkeypatch.setattr(agent, "_stream_llm", stream)
     monkeypatch.setattr(agent.qa_log, "log_turn", log_turn)
     monkeypatch.setattr(agent, "_needs_retrieval", lambda _: True)
+    monkeypatch.setattr(agent, "_is_readonly_board_question", lambda _: False)
     response = client.post("/api/v1/agent/ask", json={"question": "有哪些项目？"})
     assert "我可以帮你查看项目" in response.text
     assert "event: done" in response.text
@@ -235,3 +236,43 @@ def test_page_action_schema_rejects_invalid_arguments():
         agent.make_action("filter_board", {"show_history": "false"})
     with pytest.raises(ValueError):
         agent.make_action("control_video", {"action": "delete"})
+
+
+def test_readonly_answer_streams_before_model_finishes(monkeypatch):
+    import asyncio
+    gate = asyncio.Event()
+    async def stream(messages):
+        assert "测试项目" in messages[-1]["content"]
+        yield "第一段"
+        await gate.wait()
+        yield "第二段"
+    monkeypatch.setattr(agent, "_query_board", lambda: '{"projects":[{"name":"测试项目"}]}')
+    monkeypatch.setattr(agent, "_stream_readonly_answer", stream)
+    async def run():
+        timings = {"model_calls": 0, "model_wait": 0, "action_wait": 0, "retrieval": 0}
+        request = agent.AgentAskRequest(question="有哪些项目")
+        events = agent._model_turn("有哪些项目", request, timings, [])
+        assert await asyncio.wait_for(anext(events), 1) == ("token", {"text": "第一段"})
+        gate.set()
+        assert await asyncio.wait_for(anext(events), 1) == ("token", {"text": "第二段"})
+        await events.aclose()
+    asyncio.run(run())
+
+
+def test_editor_snapshot_is_marked_as_draft():
+    text = agent._ui_context({"page": "edit", "editProjectCount": 1, "editVersionCount": 2, "editProjects": [{"name": "草稿项目", "intro": "尚未保存的简介"}]})
+    assert "草稿项目" in text
+    assert "尚未保存" in text
+
+
+def test_admin_context_requires_ready_access():
+    ctx = {"page": "admin", "adminTab": "settings", "adminPageContext": {"page": "settings", "groups": [{"name": "语音合成"}]}}
+    assert "语音合成" not in agent._ui_context({**ctx, "adminAccess": "need-token"})
+    assert "语音合成" in agent._ui_context({**ctx, "adminAccess": "ready"})
+
+
+def test_readonly_project_questions_do_not_match_actions():
+    assert agent._readonly_project("示例项目的技术栈是什么？", {}) == "示例项目"
+    assert agent._readonly_project("这个项目的进度", {"openProject": "示例"}) == "示例"
+    assert agent._readonly_project("打开示例项目并告诉我它的技术栈", {}) is None
+    assert agent._readonly_project("这个项目的进度", {}) is None

@@ -389,6 +389,12 @@ watchEffect(() => {
   uiState.galleryOpen = galleryOpen.value
   uiState.galleryIndex = galleryIndex.value
   uiState.visibleCards = filteredVersions.value.length
+  uiState.mediaCount = galleryMedia.value.length
+  uiState.overview = {
+    projects: KANBAN_PROJECTS.length, active: activeCount.value, live: liveCount.value,
+    averageProgress: Number.isFinite(averageProgress.value) ? averageProgress.value : 0,
+    stages: KANBAN_STAGES.map((stage, index) => ({ name: stage.name, count: stageCounts.value[index] ?? 0 }))
+  }
 
 })
 

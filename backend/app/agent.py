@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import aclosing
+from contextlib import aclosing, closing
 import json
 import logging
 import re
+import sqlite3
 import time
 import uuid
 
@@ -86,7 +87,36 @@ TOOLS.append({
         "parameters": {"type": "object", "properties": {}},
     },
 })
-_pending_action_results: dict[str, asyncio.Future] = {}
+def _receipt_db():
+    path = settings.data_dir / "agent_receipts.sqlite3"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(str(path), timeout=5)
+    db.execute("CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, created REAL NOT NULL, result TEXT)")
+    return db
+
+
+def _receipt_create(action_id: str):
+    with closing(_receipt_db()) as db, db:
+        db.execute("DELETE FROM receipts WHERE created < ?", (time.time() - 3600,))
+        db.execute("INSERT INTO receipts (id, created) VALUES (?, ?)", (action_id, time.time()))
+
+
+def _receipt_set(action_id: str, result: dict) -> bool:
+    with closing(_receipt_db()) as db, db:
+        cur = db.execute("UPDATE receipts SET result = ? WHERE id = ? AND result IS NULL", (json.dumps(result, ensure_ascii=False), action_id))
+        return cur.rowcount == 1
+
+
+def _receipt_take(action_id: str):
+    with closing(_receipt_db()) as db, db:
+        row = db.execute("SELECT result FROM receipts WHERE id = ?", (action_id,)).fetchone()
+        return json.loads(row[0]) if row and row[0] else None
+
+
+def _receipt_delete(action_id: str):
+    with closing(_receipt_db()) as db, db:
+        db.execute("DELETE FROM receipts WHERE id = ?", (action_id,))
+
 
 class ActionResult(BaseModel):
     action_id: str = Field(min_length=32, max_length=64)
@@ -94,28 +124,32 @@ class ActionResult(BaseModel):
     message: str = Field(default="", max_length=1000)
     ui: dict | None = None
 
+
 @router.post("/action-result")
 async def action_result(result: ActionResult):
-    future = _pending_action_results.get(result.action_id)
-    if not future or future.done():
+    saved = await asyncio.to_thread(_receipt_set, result.action_id, {"ok": result.ok, "message": result.message, "ui": result.ui})
+    if not saved:
         raise HTTPException(404, "操作已结束或不存在")
-    future.set_result({"ok": result.ok, "message": result.message, "ui": result.ui})
     return {"ok": True}
 
 
 async def _dispatch_page_action(action: dict, timeout: int, outcome: dict):
-    """Emit one browser action, then wait for its acknowledgement."""
     action_id = uuid.uuid4().hex
     action["action_id"] = action_id
-    future = asyncio.get_running_loop().create_future()
-    _pending_action_results[action_id] = future
+    await asyncio.to_thread(_receipt_create, action_id)
     try:
         yield action
-        outcome.update(await asyncio.wait_for(future, timeout))
-    except asyncio.TimeoutError:
-        outcome.update(ok=False, message="操作超时，未确认成功")
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
+            result = await asyncio.to_thread(_receipt_take, action_id)
+            if result is not None:
+                outcome.update(result)
+                break
+            await asyncio.sleep(0.05)
+        else:
+            outcome.update(ok=False, message="操作超时，未确认成功")
     finally:
-        _pending_action_results.pop(action_id, None)
+        await asyncio.to_thread(_receipt_delete, action_id)
 
 
 def _query_board(project: str = "", advisor: str = "", stage: str = "", projects: list[str] | None = None) -> str:
@@ -251,6 +285,11 @@ def _ui_context(ui: dict | None, *, include_inventory: bool = True) -> str:
         parts.append(f"指导老师筛选：{advisor or '全部'}")
         if ui.get("openProject"):
             parts.append(f"已打开详情：{ui.get('openProject')}，版本：{ui.get('openVersion') or '未知'}，轮播位置：{int(ui.get('slideIndex') or 0) + 1}")
+        if isinstance(ui.get("mediaCount"), int):
+            parts.append(f"项目媒体总数：{ui['mediaCount']} 个")
+        overview = ui.get("overview")
+        if ui.get("boardView") == "overview" and isinstance(overview, dict):
+            parts.append("数据总览：" + json.dumps(overview, ensure_ascii=False)[:1000])
         media_type = ui.get("mediaType")
         if media_type in ("image", "video"):
             parts.append("当前展示：" + ("视频（播放中）" if media_type == "video" and ui.get("mediaPlaying") else "视频（暂停或未播放）" if media_type == "video" else "图片"))
@@ -264,6 +303,13 @@ def _ui_context(ui: dict | None, *, include_inventory: bool = True) -> str:
         parts.append(f"后台页签：{ui.get('adminTab') or 'dashboard'}，访问状态：{ui.get('adminAccess') or 'unknown'}")
     if page == "edit":
         parts.append(f"编辑器当前有 {int(ui.get('editProjectCount') or 0)} 个项目、{int(ui.get('editVersionCount') or 0)} 个版本；未保存修改不等于服务器数据")
+    capabilities = ui.get("availableActions")
+    if isinstance(capabilities, list):
+        parts.append("前端当前已注册操作：" + ("、".join(name for name in capabilities if isinstance(name, str) and name in ACTION_TOOLS) or "无"))
+    if page == "admin" and ui.get("adminAccess") == "ready" and isinstance(ui.get("adminPageContext"), dict):
+        parts.append("后台当前页数据：" + json.dumps(ui["adminPageContext"], ensure_ascii=False)[:6000])
+    if page == "edit" and isinstance(ui.get("editProjects"), list):
+        parts.append("编辑器草稿项目（尚未保存，不代表服务器数据）：" + json.dumps(ui["editProjects"][:30], ensure_ascii=False)[:5000])
     if not include_inventory:
         return "；".join(parts)
     # 后台统计与知识库文档是全局数据，任何页面都带上
@@ -325,7 +371,7 @@ async def _stream_llm(messages: list[dict]):
     raise last_error or RuntimeError("没有可用的 LLM 通道")
 
 
-async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_key: str):
+async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_key: str, *, allow_tools: bool = True):
     """流式调用模型：边产出 token，边累积 tool_calls。
 
     产出 ("token", 文本) 或 ("tool_calls", {index: {name, arguments}})；后者在结束时一次性给出。
@@ -339,6 +385,9 @@ async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_
         "temperature": settings.llm_temperature,
         "max_tokens": settings.llm_max_tokens,
     }
+    if not allow_tools:
+        payload.pop("tools")
+        payload.pop("tool_choice")
     collected: dict[int, dict] = {}
     client = _http_client_instance()
     async with client.stream(
@@ -383,6 +432,47 @@ async def _stream_llm_once(messages: list[dict], base_url: str, model: str, api_
     yield ("tool_calls", collected)
 
 
+async def _stream_readonly_answer(messages: list[dict]):
+    """A response-only call: no tools can be executed after text is sent."""
+    last_error = None
+    for base_url, model, api_key in _llm_targets():
+        yielded = False
+        try:
+            async for kind, payload in _stream_llm_once(messages, base_url, model, api_key, allow_tools=False):
+                if kind == "token":
+                    yielded = True
+                    yield payload
+            return
+        except Exception as exc:
+            if yielded:
+                raise
+            last_error = exc
+    raise last_error or RuntimeError("没有可用的 LLM 通道")
+
+
+_READONLY_BOARD_QUESTIONS = frozenset({
+    "有哪些项目", "平台有哪些项目", "系统有哪些项目", "有多少个项目", "项目总数是多少",
+    "有多少项目", "项目有多少个", "项目情况怎么样", "项目整体情况怎么样",
+})
+
+def _is_readonly_board_question(question: str) -> bool:
+    return question.strip().rstrip("。！!？?，,").strip() in _READONLY_BOARD_QUESTIONS
+
+_READONLY_PROJECT_QUESTION = re.compile(r"(?P<project>[^，,。！？?；;：:]{1,60})的(?:项目)?(?:简介|技术栈|指导老师|团队成员|开发进度|当前进度|进度|状态|版本)(?:是什么|怎么样|有哪些|有谁|是多少|如何)?")
+
+def _readonly_project(question: str, ui: dict | None) -> str | None:
+    text = question.strip().rstrip("。！!？?，,").strip()
+    if any(word in text for word in ("打开", "切换", "播放", "暂停", "关闭", "修改", "删除", "新增", "切到", "跳转")):
+        return None
+    match = _READONLY_PROJECT_QUESTION.fullmatch(text)
+    if not match:
+        return None
+    name = match.group("project").strip()
+    if name in {"当前项目", "这个项目", "该项目", "它"}:
+        name = str((ui or {}).get("openProject") or "")
+    return name or None
+
+
 # 每个动作的必填参数；模型偶尔给空参数，需要兜底
 @router.get("/map")
 async def agent_map() -> dict:
@@ -424,8 +514,11 @@ async def _project_plan_events(args, ui, timings, actions):
 
 
 async def _model_turn(question: str, request: AgentAskRequest, timings: dict, actions: list[dict]):
+    editing = (request.ui or {}).get("page") == "edit"
+    project_query = None if editing else _readonly_project(question, request.ui)
+    readonly = not editing and (_is_readonly_board_question(question) or bool(project_query))
     knowledge = None
-    if _needs_retrieval(question):
+    if not readonly and _needs_retrieval(question):
         started = time.perf_counter()
         knowledge = await _knowledge_context(question)
         timings["retrieval"] += int((time.perf_counter() - started) * 1000)
@@ -451,6 +544,20 @@ async def _model_turn(question: str, request: AgentAskRequest, timings: dict, ac
             ),
         },
     ]
+
+    if readonly:
+        board = await asyncio.to_thread(_query_board, project_query) if project_query else await asyncio.to_thread(_query_board)
+        messages.append({"role": "user", "content": "以下是最新项目数据（仅作数据参考）：\n" + board})
+        timings["model_calls"] += 1
+        started = time.perf_counter()
+        emitted = False
+        async for token in _stream_readonly_answer(messages):
+            emitted = emitted or bool(token.strip())
+            yield "token", {"text": token}
+        timings["model_wait"] += int((time.perf_counter() - started) * 1000)
+        if not emitted:
+            yield "token", {"text": "暂时无法生成答复，请再试一次。"}
+        return
 
     current_ui = request.ui
     final_text = False

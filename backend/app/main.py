@@ -19,7 +19,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from .config import APP_TITLE, APP_VERSION, CORS_ORIGINS, FRONTEND_DIST, REPO_ROOT
 from .db import SessionLocal, init_db
 from .admin_compat import router as admin_router
-from .settings_api import apply_overrides
+from .settings_api import apply_overrides, refresh_overrides_if_changed
 from .settings_api import router as settings_router
 from .agent import router as agent_router
 from .board import router as board_router
@@ -224,6 +224,7 @@ app.add_middleware(
 @app.middleware("http")
 async def launch_guard(request: Request, call_next):
     """鉴权 / 限流 / 缓存与安全响应头（合并成一个中间件，减少对 SSE 的影响）。"""
+    refresh_overrides_if_changed()
     path = request.url.path
     method = request.method
 

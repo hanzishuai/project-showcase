@@ -37,3 +37,5 @@ backend/data/settings.json
 
 # 本地 Nginx 运行程序与配置
 .tools/
+
+backend/data/agent_receipts.sqlite3

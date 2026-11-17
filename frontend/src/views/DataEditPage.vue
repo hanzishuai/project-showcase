@@ -36,6 +36,10 @@ const totalVersions = computed(() => projects.value.reduce((total, project) => t
 watchEffect(() => {
   uiState.editProjectCount = projects.value.length
   uiState.editVersionCount = totalVersions.value
+  uiState.editProjects = projects.value.slice(0, 30).map(project => ({
+    name: project.name.slice(0, 120), owner: project.owner.slice(0, 120), team: project.team.slice(0, 120),
+    intro: project.intro.slice(0, 500), stack: project.stackText.slice(0, 200), versions: project.versions.length
+  }))
 })
 
 const splitStack = (value: string) => value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)

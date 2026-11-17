@@ -12,10 +12,14 @@ export const uiState = reactive({
   slideIndex: -1,
   mediaType: '' as '' | 'image' | 'video',
   mediaPlaying: false,
+  mediaCount: 0,
+  overview: null as null | { projects: number; active: number; live: number; averageProgress: number; stages: { name: string; count: number }[] },
   adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge' | 'settings',
   adminAccess: 'unknown' as 'unknown' | 'ready' | 'need-token',
+  adminPageContext: null as null | Record<string, unknown>,
   editProjectCount: 0,
   editVersionCount: 0,
+  editProjects: [] as { name: string; owner: string; team: string; intro: string; stack: string; versions: number }[],
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
   /** 图片灯箱状态：模型据此决定是「打开图片」还是「翻页」 */
@@ -41,6 +45,8 @@ export function snapshotUiState(): Record<string, unknown> {
     slideIndex: uiState.slideIndex,
     mediaType: uiState.mediaType,
     mediaPlaying: uiState.mediaPlaying,
+    mediaCount: uiState.mediaCount,
+    overview: uiState.overview,
     galleryOpen: uiState.galleryOpen,
     galleryIndex: uiState.galleryIndex,
     visibleCards: uiState.visibleCards,
@@ -48,7 +54,9 @@ export function snapshotUiState(): Record<string, unknown> {
     knowledgeDocs: uiState.knowledgeDocs,
     adminTab: uiState.adminTab,
     adminAccess: uiState.adminAccess,
+    adminPageContext: uiState.adminPageContext,
     editProjectCount: uiState.editProjectCount,
-    editVersionCount: uiState.editVersionCount
+    editVersionCount: uiState.editVersionCount,
+    editProjects: uiState.editProjects
   }
 }

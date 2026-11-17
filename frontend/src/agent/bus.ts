@@ -7,6 +7,7 @@ export interface AgentAction { tool: string; args: Record<string, unknown>; acti
 export interface ActionOutcome { ok: boolean; message: string; ui: Record<string, unknown> }
 type Handler = (args: Record<string, unknown>) => boolean | string | void | Promise<boolean | string | void>
 const handlers = new Map<string, Handler>()
+export function availableActions(): string[] { return [...handlers.keys()] }
 let failureHandler: ((text: string) => void) | null = null
 export function setActionFailureHandler(handler: ((text: string) => void) | null): void { failureHandler = handler }
 export function registerAction(tool: string, handler: Handler): () => void {
@@ -37,6 +38,6 @@ export async function dispatchAction(action: AgentAction, signal?: AbortSignal):
     else Message.warning(message)
   }
   await nextTick()
-  return { ok, message, ui: snapshotUiState() }
+  return { ok, message, ui: { ...snapshotUiState(), availableActions: availableActions(), contractVersion: 1 } }
 }
 if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__agentDispatchAction = dispatchAction

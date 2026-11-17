@@ -46,9 +46,11 @@ EDITABLE: dict[str, dict[str, Any]] = {
     "llm_fallback_api_key": {"group": "备用语言模型", "label": "API Key", "type": "password", "secret": True, "hint": "留空表示不修改"},
     "llm_max_tokens": {"group": "语言模型", "label": "最大输出 Token", "type": "number"},
     "llm_temperature": {"group": "语言模型", "label": "温度", "type": "number", "hint": "0–2"},
-    "tts_base_url": {"group": "语音合成", "label": "请求地址", "type": "text", "hint": "百炼兼容的 TTS HTTP 接口完整地址"},
+    "tts_protocol": {"group": "语音合成", "label": "接口协议", "type": "select", "options": ["dashscope", "openai"], "hint": "更改协议后请同步修改地址、模型和音色"},
+    "asr_protocol": {"group": "语音识别", "label": "接口协议", "type": "select", "options": ["dashscope", "openai"], "hint": "openai 通过分段上传支持打断，速度和费用取决于服务"},
+    "tts_base_url": {"group": "语音合成", "label": "请求地址", "type": "text", "hint": "TTS 接口完整地址，须匹配所选协议"},
     "tts_api_key": {"group": "语音合成", "label": "API Key", "type": "password", "secret": True, "hint": "填写此服务的 API Key；留空表示不修改"},
-    "asr_base_url": {"group": "语音识别", "label": "请求地址", "type": "text", "hint": "百炼兼容的实时识别 WebSocket 地址"},
+    "asr_base_url": {"group": "语音识别", "label": "请求地址", "type": "text", "hint": "百炼填写 WebSocket 地址；OpenAI 填写识别 HTTP 地址"},
     "asr_api_key": {"group": "语音识别", "label": "API Key", "type": "password", "secret": True, "hint": "填写此服务的 API Key；留空表示不修改"},
     "tts_model": {
         "group": "语音合成", "label": "TTS 模型", "type": "text", "secret": False,
@@ -125,6 +127,8 @@ def _write_overrides(data: dict[str, Any]) -> None:
     os.replace(tmp, SETTINGS_FILE)  # 原子替换，避免断电留下半个 JSON
 
 
+_settings_stamp: tuple[int, int] | None = None
+
 def apply_overrides() -> None:
     """启动时把 settings.json 里的覆盖值应用到运行配置。"""
     overrides = _read_overrides()
@@ -152,9 +156,28 @@ def apply_overrides() -> None:
             for key, value in migrated.items():
                 setattr(settings, key, value)
             logger.info("speech_keys_migrated: %s", ", ".join(migrated))
+    global _settings_stamp
+    try:
+        stat = SETTINGS_FILE.stat()
+        _settings_stamp = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        _settings_stamp = None
     if applied:
         logger.warning("settings_overrides_applied: %s", ", ".join(applied))
 
+
+def refresh_overrides_if_changed() -> None:
+    try:
+        stat = SETTINGS_FILE.stat()
+        stamp = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        stamp = None
+    if stamp != _settings_stamp:
+        old_tts = (settings.tts_model, settings.tts_voice, settings.tts_api_key, settings.tts_base_url, settings.tts_protocol)
+        apply_overrides()
+        if old_tts != (settings.tts_model, settings.tts_voice, settings.tts_api_key, settings.tts_base_url, settings.tts_protocol):
+            from pp7rag.ragapi.providers import tts
+            tts._cache.clear()
 
 def _item(key: str, meta: dict[str, Any]) -> dict[str, Any]:
     raw = getattr(settings, key, "")
@@ -214,9 +237,11 @@ async def update_settings(payload: SettingsUpdate) -> dict:
             converted = _coerce(key, value)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail=f"{EDITABLE[key]['label']} 的取值不合法")
+        if key in {"tts_protocol", "asr_protocol"} and converted not in {"dashscope", "openai"}:
+            raise HTTPException(status_code=400, detail="不支持的语音协议")
         if key in {"llm_base_url", "llm_fallback_base_url", "tts_base_url", "asr_base_url"}:
             base = str(converted).strip()
-            if not base.startswith(("ws://", "wss://") if key == "asr_base_url" else ("http://", "https://")):
+            if not base.startswith(("ws://", "wss://", "http://", "https://") if key == "asr_base_url" else ("http://", "https://")):
                 raise HTTPException(status_code=400, detail=f"{EDITABLE[key]['label']} 的协议不正确")
         if key == "rag_top_k":
             converted = max(1, min(10, int(converted)))
@@ -306,6 +331,9 @@ async def test_connection(payload: TestRequest) -> dict:
             from pp7rag.ragapi.providers.http import get_session
             if not asr.is_configured():
                 raise ValueError("未配置语音识别密钥")
+            if settings.asr_protocol == "openai":
+                await asr.transcribe(bytes(16000))
+                return {"ok": True, "target": target, "message": f"识别模型 {settings.asr_model} 连接成功", "ms": int((time.perf_counter() - started) * 1000)}
             session = await get_session()
             async with session.ws_connect(f"{settings.asr_base_url}?model={settings.asr_model}", headers={"Authorization": f"Bearer {asr._api_key()}"}, timeout=15) as ws:
                 await asr._wait_for(ws, {"session.created"}, 10)

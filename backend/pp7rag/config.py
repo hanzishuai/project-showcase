@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     rag_history_budget_chars: int = 1200  # 历史总字数预算（从最近往前装）
     # Speech: ASR/TTS share the DashScope key; falls back to TTS_API_KEY/OMNI_API_KEY.
     dashscope_api_key: str = ""
+    asr_protocol: str = "dashscope"
+    tts_protocol: str = "dashscope"
     asr_api_key: str = ""
     asr_base_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
     tts_api_key: str = ""

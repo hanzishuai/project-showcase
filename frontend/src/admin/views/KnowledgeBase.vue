@@ -97,8 +97,9 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { uiState } from '../../agent/uiState'
 import { api } from '../api'
 import type { KnowledgeDocument, KnowledgePreview } from '../api'
 
@@ -144,6 +145,12 @@ const chunkPagination = computed(() => (chunkTotal.value > 8 ? { pageSize: 8, sh
 const markdownTruncated = computed(() => !!preview.value && preview.value.markdown.length < preview.value.markdown_chars)
 const canCommit = computed(() => !!preview.value && chunkTotal.value > 0 && !!commitFilename.value.trim())
 
+watchEffect(() => {
+  uiState.adminPageContext = { page: 'knowledge', loading: docsLoading.value, error: docsError.value,
+    documents: docs.value.slice(0, 30).map(item => ({ name: item.name, size: item.size, modifiedAt: item.modified_at })),
+    preview: previewVisible.value ? { filename: previewFilename.value, chunks: chunkTotal.value, warnings: warningList.value } : null }
+})
+onBeforeUnmount(() => { uiState.adminPageContext = null })
 onMounted(loadDocs)
 
 async function loadDocs() {
