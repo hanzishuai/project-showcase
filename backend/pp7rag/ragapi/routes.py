@@ -343,6 +343,8 @@ async def rag_stream_ws(ws: WebSocket) -> None:
 @router.websocket("/asr/stream")
 async def rag_asr_stream_ws(ws: WebSocket) -> None:
     """Stream microphone PCM and forward partial transcripts as they arrive."""
+    from app.settings_api import refresh_overrides_if_changed
+    refresh_overrides_if_changed()
     await ws.accept()
     if not asr.is_configured():
         await ws.send_json({"type": "error", "message": "语音识别未配置。"})
@@ -358,7 +360,7 @@ async def rag_asr_stream_ws(ws: WebSocket) -> None:
     def on_partial(text: str) -> None:
         asyncio.create_task(send({"type": "partial", "text": text}))
 
-    transcriber = asr.StreamingTranscriber(on_partial=on_partial)
+    transcriber = asr.create_transcriber(on_partial=on_partial)
     try:
         await send({"type": "connecting"})
         try:

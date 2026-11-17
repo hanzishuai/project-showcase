@@ -76,7 +76,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watchEffect } from 'vue'
+import { uiState } from '../../agent/uiState'
 import { api } from '../api'
 import { Message } from '@arco-design/web-vue'
 
@@ -103,6 +104,15 @@ const columns = [
   { title: '操作', slotName: 'action', width: 130 },
 ]
 
+watchEffect(() => {
+  uiState.adminPageContext = {
+    page: 'conversations', loading: loading.value, error: error.value,
+    search: searchActive.value ? searchQuery.value.slice(0, 120) : '', total: pagination.value.total,
+    sessions: sessions.value.slice(0, 20).map(item => ({ preview: String(item.preview || '').slice(0, 200), status: item.status, messageCount: item.message_count })),
+    detail: detailVisible.value ? messages.value.slice(0, 30).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 300) })) : null
+  }
+})
+onBeforeUnmount(() => { uiState.adminPageContext = null })
 onMounted(() => refresh())
 async function refresh() {
   loading.value = true

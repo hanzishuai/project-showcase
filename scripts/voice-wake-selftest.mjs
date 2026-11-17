@@ -19,7 +19,8 @@ const { createVoiceLoop, extractWakeCommand } = await import(
   'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
 )
 assert.equal(extractWakeCommand('你好，窦杰，请介绍这个项目。'), '请介绍这个项目。')
-assert.equal(extractWakeCommand('豆姐'), null)
+assert.equal(extractWakeCommand('豆姐'), '')
+assert.equal(extractWakeCommand('豆姐，你好'), '')
 
 let rec, stream, starts = 0, interrupts = 0, attempts = 0
 let captureOpen = true
@@ -46,7 +47,7 @@ globalThis.mockAsrStream = options => stream = {
 globalThis.fetch = async () => { attempts++; return { ok: false, status: 503 } }
 
 const flush = () => new Promise(resolve => setImmediate(resolve))
-const audible = () => rec.options.onPcmChunk(new Int16Array(1280).fill(5000))
+const audible = () => { for (let i = 0; i < 2; i++) rec.options.onPcmChunk(new Int16Array(1280).fill(5000)) }
 function endTurn(text) {
   stream.final = text
   for (let i = 0; i < 9; i++) rec.options.onPcmChunk(new Int16Array(1280))
@@ -76,8 +77,6 @@ const loop = createVoiceLoop({
 
 try {
   await loop.start()
-  await say('豆姐')
-  assert.deepEqual(replies, [], '打断词单独出现不能唤醒')
   await say('你好豆姐，介绍项目')
   assert.deepEqual(replies, ['你好，我在'])
   assert.deepEqual(questions, ['介绍项目'])
@@ -107,7 +106,17 @@ try {
   assert.deepEqual(replies, ['你好，我在', '好的，再见'])
   assert.equal(starts, 1, '唤醒、问答、打断和结束均复用同一个录音器')
 
-  await say('你好豆姐')
+  for (const goodbye of ['豆姐再见', '再见，豆姐', '豆姐，再见', '豆姐拜拜']) {
+    await say('豆姐你好')
+    await say(goodbye)
+    assert.equal(statuses.at(-1), 'wake', goodbye)
+  }
+  await say('豆姐')
+  const beforeNoise = questions.length
+  await say('Thank you.')
+  assert.equal(questions.length, beforeNoise, '背景噪声不应触发 Thank you 对话')
+  await say('Okay.')
+  assert.equal(questions.length, beforeNoise, '背景噪声不应触发 Okay 对话')
   await say('再问一个问题')
   releaseAnswer()
   await flush()

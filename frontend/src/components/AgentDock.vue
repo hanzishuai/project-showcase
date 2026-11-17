@@ -200,7 +200,11 @@ const voiceLoop = createVoiceLoop({
   async onQuestion(text, signal) {
     const chat = avatarRef.value?.chat
     if (!chat?.ask) throw new Error('助手尚未准备好')
-    if (!signal.aborted) await chat.ask(text)
+    if (signal.aborted) return
+    const abort = () => chat.interrupt?.()
+    signal.addEventListener('abort', abort, { once: true })
+    try { await chat.ask(text) }
+    finally { signal.removeEventListener('abort', abort) }
   }
 })
 const voiceMessage = computed(() => {

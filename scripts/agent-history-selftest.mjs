@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { build } from '../frontend/node_modules/esbuild/lib/main.js'
-const bundle = await build({entryPoints:['frontend/src/agent/fetch.ts'],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'mock',setup(b){b.onResolve({filter:/\/(bus|uiState)$/},args=>({path:args.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:args.path.endsWith('bus')?'export const dispatchAction=async()=>({ok:true})':'export const snapshotUiState=()=>({})',loader:'js'}))}}]})
+const bundle = await build({entryPoints:['frontend/src/agent/fetch.ts'],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'mock',setup(b){b.onResolve({filter:/\/(bus|uiState)$/},args=>({path:args.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:args.path.endsWith('bus')?'export const dispatchAction=async()=>({ok:true}); export const availableActions=()=>[]':'export const snapshotUiState=()=>({})',loader:'js'}))}}]})
 const storage=new Map();globalThis.sessionStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}
 let sse=''
 globalThis.fetch=async()=>new Response(sse,{headers:{'Content-Type':'text/event-stream'}})

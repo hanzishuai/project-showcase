@@ -8,10 +8,12 @@ const SAMPLE_RATE = 16_000
 const PRE_ROLL_SAMPLES = 4_800
 const SILENCE_SAMPLES = 11_200
 const MAX_TURN_SAMPLES = SAMPLE_RATE * 15
+const MIN_VOICED_SAMPLES = SAMPLE_RATE * 0.16
+const ASR_NOISE_PHRASES = /^(?:thank you|thanks|okay|ok)[.!?，。！？\s]*$/i
 const NAME = /[豆窦][，,、\s]*[姐杰]/
 const ADDRESS = /^[豆窦][，,、\s]*[姐杰]/
-const WAKE = /你[好号][，,。！!？?、\s]*[豆窦][，,、\s]*[姐杰]/
-const GOODBYE = /再见[，,。！!？?、\s]*[豆窦][，,、\s]*[姐杰]/
+const WAKE = /(?:你[好号][，,。！!？?、\s]*)?[豆窦][，,、\s]*[姐杰](?:[，,。！!？?、\s]*你[好号])?/
+const GOODBYE = /(?:再见|拜拜|拜了|回头见|下次见).*?[豆窦][，,、\s]*[姐杰]|[豆窦][，,、\s]*[姐杰].*?(?:再见|拜拜|拜了|回头见|下次见)/
 
 function commandAfter(text: string, phrase: RegExp): string | null {
   const match = phrase.exec(text)
@@ -29,7 +31,9 @@ type VoiceTurn = {
   chunks: Int16Array[]
   samples: number
   quiet: number
+  voicedSamples: number
   duringReply: boolean
+  duringAcknowledgement: boolean
   interrupted: boolean
   partial: string
 }
@@ -71,7 +75,7 @@ export function createVoiceLoop(options: {
   let collecting: VoiceTurn | null = null
   let recognizing: VoiceTurn | null = null
   let output: AbortController | null = null
-  let awake = false
+  const state: { mode: 'waiting' | 'active'; acknowledgement: AbortController | null } = { mode: 'waiting', acknowledgement: null }
   let preRoll: Int16Array[] = []
   let preRollSize = 0
 
@@ -80,7 +84,8 @@ export function createVoiceLoop(options: {
     session = null
     output?.abort()
     output = null
-    awake = false
+    state.mode = 'waiting'
+    state.acknowledgement = null
     collecting?.recognizer.dispose()
     recognizing?.recognizer.dispose()
     collecting = null
@@ -103,7 +108,7 @@ export function createVoiceLoop(options: {
   }
 
   function interrupt(turn: VoiceTurn, text: string) {
-    if (!awake || !turn.duringReply || turn.interrupted || !NAME.test(text)) return
+    if (state.mode !== 'active' || state.acknowledgement || turn.duringAcknowledgement || !turn.duringReply || turn.interrupted || !NAME.test(text)) return
     turn.interrupted = true
     output?.abort()
     options.onInterrupt()
@@ -117,7 +122,9 @@ export function createVoiceLoop(options: {
     try {
       if (acknowledgement) {
         options.onStatus('answering', acknowledgement)
-        await options.onAcknowledge(acknowledgement, replySignal)
+        state.acknowledgement = reply
+        try { await options.onAcknowledge(acknowledgement, replySignal) }
+        finally { if (state.acknowledgement === reply) state.acknowledgement = null }
       }
       if (question && !replySignal.aborted) {
         options.onStatus('answering')
@@ -128,26 +135,28 @@ export function createVoiceLoop(options: {
     } finally {
       if (output === reply) {
         output = null
-        if (!signal.aborted && !reply.signal.aborted) options.onStatus(awake ? 'listening' : 'wake')
+        if (!signal.aborted && !reply.signal.aborted) options.onStatus(state.mode === 'active' ? 'listening' : 'wake')
       }
     }
   }
 
   function handleText(turn: VoiceTurn, text: string, signal: AbortSignal) {
-    if (!text || signal.aborted) return
-    if (!awake) {
+    if (!text || signal.aborted || turn.duringAcknowledgement || (turn.voicedSamples < SAMPLE_RATE * 0.5 && ASR_NOISE_PHRASES.test(text.trim()))) return
+    if (state.mode !== 'active') {
+      if (GOODBYE.test(text)) return
       const question = extractWakeCommand(text)
       if (question === null || busy()) return
-      awake = true
+      state.mode = 'active'
       void respond(signal, question, '你好，我在')
       return
     }
     if (turn.duringReply) {
+      if (state.acknowledgement) return
       interrupt(turn, text)
       if (!turn.interrupted) return
     }
     if (GOODBYE.test(text)) {
-      awake = false
+      state.mode = 'waiting'
       void respond(signal, '', '好的，再见')
       return
     }
@@ -164,6 +173,12 @@ export function createVoiceLoop(options: {
   async function finish(turn: VoiceTurn, signal: AbortSignal) {
     collecting = null
     recognizing = turn
+    if (turn.voicedSamples < MIN_VOICED_SAMPLES && !turn.interrupted) {
+      turn.recognizer.dispose()
+      recognizing = null
+      if (!signal.aborted && !busy()) options.onStatus(state.mode === 'active' ? 'listening' : 'wake')
+      return
+    }
     if (!busy() || turn.interrupted) options.onStatus('recognizing')
     try {
       let text = ''
@@ -182,7 +197,7 @@ export function createVoiceLoop(options: {
     } finally {
       turn.recognizer.dispose()
       if (recognizing === turn) recognizing = null
-      if (!signal.aborted && !busy()) options.onStatus(awake ? 'listening' : 'wake')
+      if (!signal.aborted && !busy()) options.onStatus(state.mode === 'active' ? 'listening' : 'wake')
     }
   }
 
@@ -191,9 +206,9 @@ export function createVoiceLoop(options: {
     const energy = chunk.reduce((sum, sample) => sum + sample * sample, 0)
     const voiced = energy > chunk.length * (32768 * 0.012) ** 2
 
-    if (!collecting && voiced && !recognizing && (awake || !busy())) {
+    if (!collecting && voiced && !recognizing && (state.mode === 'active' || !busy())) {
       const recognizer = createAsrStreamSession({
-        apiBaseUrl: '', signal, connectTimeoutMs: 3000, finalTimeoutMs: 2500,
+        apiBaseUrl: '', signal, connectTimeoutMs: 3000, finalTimeoutMs: 15000,
         onPartial(text: string) {
           if (signal.aborted || (collecting !== turn && recognizing !== turn)) return
           turn.partial = text
@@ -202,8 +217,8 @@ export function createVoiceLoop(options: {
       })
       const turn: VoiceTurn = {
         recognizer, ready: recognizer.open().then(() => true, () => false),
-        chunks: preRoll, samples: preRollSize, quiet: 0,
-        duringReply: busy(), interrupted: false, partial: ''
+        chunks: preRoll, samples: preRollSize, quiet: 0, voicedSamples: 0,
+        duringReply: busy(), duringAcknowledgement: !!state.acknowledgement, interrupted: false, partial: ''
       }
       collecting = turn
       for (const pending of preRoll) recognizer.push(pending)
@@ -214,9 +229,11 @@ export function createVoiceLoop(options: {
     const turn = collecting
     if (turn) {
       // A typed question may start after this turn began.
+      if (state.acknowledgement) turn.duringAcknowledgement = true
       if (busy() && !turn.interrupted) turn.duringReply = true
       turn.chunks.push(chunk)
       turn.samples += chunk.length
+      if (voiced) turn.voicedSamples += chunk.length
       turn.quiet = voiced ? 0 : turn.quiet + chunk.length
       turn.recognizer.push(chunk)
       if (turn.quiet >= SILENCE_SAMPLES || turn.samples >= MAX_TURN_SAMPLES) void finish(turn, signal)

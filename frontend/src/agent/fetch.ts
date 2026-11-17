@@ -4,7 +4,7 @@
  * 做法：把响应流 tee 成两路 —— 一路原样交给 rag-avatar 组件做流式显示，
  * 另一路自己解析 SSE，遇到 `action` 事件就丢给动作总线。
  */
-import { dispatchAction, type AgentAction } from './bus'
+import { availableActions, dispatchAction, type AgentAction } from './bus'
 import { snapshotUiState } from './uiState'
 
 interface Turn {
@@ -147,7 +147,7 @@ export const agentFetch: typeof fetch = async (input: RequestInfo | URL, init?: 
   const response = await fetch(AGENT_ASK, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ ...body, ui: snapshotUiState(), history: [...history] }),
+    body: JSON.stringify({ ...body, ui: { ...snapshotUiState(), availableActions: availableActions(), contractVersion: 1 }, history: [...history] }),
     signal: init?.signal
   })
 

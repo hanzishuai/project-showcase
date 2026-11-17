@@ -146,6 +146,20 @@ async def _stream_pcm(text: str, voice: str, speed: float | None = None):
     """
     if not _api_key():
         raise TTSError("未配置语音合成密钥（TTS_API_KEY）。")
+    if settings.tts_protocol == "openai":
+        session = await get_tts_session()
+        try:
+            async with session.post(settings.tts_base_url, headers={"Authorization": f"Bearer {_api_key()}"}, json={"model": settings.tts_model, "input": text, "voice": voice, "response_format": "pcm", "speed": speed or 1.0}, timeout=aiohttp.ClientTimeout(total=60, sock_read=10)) as response:
+                if response.status >= 400:
+                    raise TTSError(f"语音合成请求失败（HTTP {response.status}）")
+                async for chunk in response.content.iter_chunked(STREAM_CHUNK_BYTES):
+                    if chunk:
+                        yield chunk
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            raise TTSError("语音合成连接失败或超时。") from exc
+        return
+    if settings.tts_protocol != "dashscope":
+        raise TTSError("不支持的语音合成协议。")
     payload = {
         "model": settings.tts_model or "qwen3-tts-flash",
         "input": {"text": text, "voice": voice},
