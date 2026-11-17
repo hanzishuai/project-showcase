@@ -6,6 +6,7 @@
  */
 const BASE = process.env.AGENT_BASE || 'http://127.0.0.1:8000'
 const ROUNDS = Number(process.argv[2] || 20)
+const MEASURE_TTS = process.argv.includes('--tts')
 const argValue = (name, fallback) => {
   const hit = process.argv.find((item) => item.startsWith('--' + name + '='))
   return hit ? Number(hit.split('=')[1]) : fallback
@@ -14,34 +15,34 @@ const argValue = (name, fallback) => {
 const MAX_TTFT_P90 = argValue('max-p90', 1800)
 const MAX_TOTAL_P90 = argValue('max-total-p90', 2200)
 
-const BOARD = [
-  { name: '实验室预约系统', version: 'v1.2', stage: '开发', advisor: '张三', stack: 'Vue 3·Spring Boot·MySQL', team: '张三、李宁、王琳', users: 0, features: 0 },
-  { name: '学术讲座预约平台', version: 'v1.1', stage: '上线', advisor: '吴迪', stack: 'Vue 3·Spring Boot·PostgreSQL', team: '吴迪、贺云、何琳', users: 1260, features: 24 }
-]
+const boardResponse = await fetch(BASE + '/api/board', { signal: AbortSignal.timeout(10000) })
+if (!boardResponse.ok) throw new Error('无法读取当前看板数据：HTTP ' + boardResponse.status)
+const { data } = await boardResponse.json()
+const project = data.projects.find(item => item.intro && item.versions.length)
+if (!project) throw new Error('看板缺少带简介和版本的项目')
 const UI = {
   page: 'board',
   boardView: 'board',
-  visibleCards: 2,
-  projects: BOARD.map((item) => item.name),
-  boardProjects: BOARD,
-  adminStats: { sessions: 42, documents: 1 },
-  knowledgeDocs: ['产教融合服务平台.md']
+  openProject: project.name,
+  mediaType: 'video',
+  mediaPlaying: false
 }
-
 const QUESTIONS = [
-  { kind: '动作', text: '打开管理后台' },
+  { kind: '动作', text: '打开' + project.name },
   { kind: '动作', text: '切到数据总览' },
-  { kind: '事实', text: '实验室预约系统现在什么进度？' },
-  { kind: '事实', text: '哪些项目已经上线？' },
-  { kind: '复合', text: '打开实验室预约系统，顺便说说技术栈' }
+  { kind: '事实', text: project.name + '的项目简介是什么？' },
+  { kind: '事实', text: '现在展示的是视频还是图片？' },
+  { kind: '复合', text: '打开' + project.name + '，顺便说说技术栈' },
+  { kind: '复合', text: '帮我把' + project.name + '的详情调出来，再告诉我它用了哪些技术' }
 ]
 
-async function run(question) {
+async function run(question, measureTts = false) {
   const started = performance.now()
   const response = await fetch(BASE + '/api/v1/agent/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, ui: UI })
+    body: JSON.stringify({ question, ui: UI }),
+    signal: AbortSignal.timeout(60000)
   })
   if (!response.ok || !response.body) throw new Error('HTTP ' + response.status)
   const reader = response.body.getReader()
@@ -49,8 +50,10 @@ async function run(question) {
   let buffer = ''
   let event = ''
   let ttft = null
-  let chars = 0
+  let answer = ''
   let actions = 0
+  let actionConfirmed = null
+  let completion
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
@@ -65,13 +68,48 @@ async function run(question) {
       const payload = line.slice(5).trim()
       if (event === 'token') {
         if (ttft === null) ttft = performance.now() - started
-        try { chars += (JSON.parse(payload).text || '').length } catch {}
+        answer += JSON.parse(payload).text || ''
       } else if (event === 'action') {
         actions += 1
+        const { action_id } = JSON.parse(payload)
+        // Measure the server round trip using an immediate simulated UI acknowledgement.
+        const ack = await fetch(BASE + '/api/v1/agent/action-result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action_id, ok: true, message: '测试页面执行成功', ui: UI }),
+          signal: AbortSignal.timeout(5000)
+        })
+        if (!ack.ok) throw new Error('动作回传 HTTP ' + ack.status)
+        actionConfirmed = performance.now() - started
+      } else if (event === 'done') {
+        completion = JSON.parse(payload)
+      } else if (event === 'error') {
+        throw new Error(JSON.parse(payload).message || 'Agent 请求失败')
       }
     }
   }
-  return { ttft: ttft ?? performance.now() - started, total: performance.now() - started, chars, actions }
+  if (ttft === null || !completion) throw new Error('Agent 未返回完整答复')
+  const total = performance.now() - started
+  let audioReady = null
+  if (measureTts) {
+    const audio = await fetch(BASE + '/api/v1/rag/tts/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: answer }),
+      signal: AbortSignal.timeout(30000)
+    })
+    if (!audio.ok || !audio.body) throw new Error('播报 HTTP ' + audio.status)
+    const pcm = audio.body.getReader()
+    try {
+      const chunk = await pcm.read()
+      if (!chunk.value?.length) throw new Error('播报未返回音频')
+      audioReady = performance.now() - started
+    } finally {
+      await pcm.cancel()
+    }
+  }
+  return { ttft, total, chars: answer.length, actions, route: completion.route,
+    modelCalls: completion.model_calls, actionConfirmed, audioReady }
 }
 
 function percentile(values, p) {
@@ -92,7 +130,7 @@ const rows = []
 for (let i = 0; i < ROUNDS; i += 1) {
   const question = QUESTIONS[i % QUESTIONS.length]
   try {
-    const result = await run(question.text)
+    const result = await run(question.text, MEASURE_TTS && question.kind === '复合')
     rows.push({ ...question, ...result })
     process.stdout.write('.')
   } catch (error) {
@@ -117,12 +155,20 @@ console.log('总耗时  ms  min=' + Math.round(Math.min(...totals)) +
   '  P90=' + Math.round(percentile(totals, 90)) +
   '  max=' + Math.round(Math.max(...totals)))
 
+console.log('直接处理样本：' + ok.filter(row => row.route === 'direct').length)
 console.log('\n按类型：')
 for (const kind of ['动作', '事实', '复合']) {
   const list = ok.filter((row) => row.kind === kind)
   if (list.length === 0) continue
   const values = list.map((row) => row.ttft)
   console.log('  ' + kind + '  样本=' + list.length + '  首字 P50=' + Math.round(percentile(values, 50)) + 'ms  P90=' + Math.round(percentile(values, 90)) + 'ms')
+}
+
+for (const row of ok.filter(row => row.kind === '复合')) {
+  console.log('  ' + row.text + ' | 模型调用 ' + row.modelCalls + ' | 首字 ' +
+    Math.round(row.ttft) + 'ms' +
+    (row.actionConfirmed === null ? ' | 无页面回执' : ' | 模拟回执 ' + Math.round(row.actionConfirmed) + 'ms') +
+    (row.audioReady === null ? '' : ' | 首段音频接口 ' + Math.round(row.audioReady) + 'ms'))
 }
 
 let failed = ok.length !== rows.length

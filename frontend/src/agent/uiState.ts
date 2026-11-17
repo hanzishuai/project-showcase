@@ -10,30 +10,19 @@ export const uiState = reactive({
   openProject: '',
   openVersion: '',
   slideIndex: -1,
+  mediaType: '' as '' | 'image' | 'video',
+  mediaPlaying: false,
   adminTab: 'dashboard' as 'dashboard' | 'conversations' | 'knowledge' | 'settings',
   adminAccess: 'unknown' as 'unknown' | 'ready' | 'need-token',
   editProjectCount: 0,
   editVersionCount: 0,
   /** 全屏灯箱等遮罩打开时隐藏数字人，避免压在上面 */
   modalOpen: false,
-  /** 看板项目名，作为 Agent 的可用目标（避免它编造项目） */
-  projects: [] as string[],
   /** 图片灯箱状态：模型据此决定是「打开图片」还是「翻页」 */
   galleryOpen: false,
   galleryIndex: -1,
   /** 当前筛选后可见的版本卡数量，Agent 用它回答「还剩几个」 */
   visibleCards: 0,
-  /** 看板项目快照（名称/版本/阶段/指导老师），让 Agent 直接回答看板上的事实 */
-  boardProjects: [] as Array<{
-    name: string
-    version: string
-    stage: string
-    advisor: string
-    stack: string
-    team: string
-    users: number
-    features: number
-  }>,
   /** 管理后台概览数据 */
   adminStats: null as null | { sessions: number; documents: number },
   /** 知识库文档名，让 Agent 能回答「知识库里有哪些文档」 */
@@ -50,10 +39,11 @@ export function snapshotUiState(): Record<string, unknown> {
     openProject: uiState.openProject,
     openVersion: uiState.openVersion,
     slideIndex: uiState.slideIndex,
+    mediaType: uiState.mediaType,
+    mediaPlaying: uiState.mediaPlaying,
     galleryOpen: uiState.galleryOpen,
     galleryIndex: uiState.galleryIndex,
     visibleCards: uiState.visibleCards,
-    boardProjects: uiState.boardProjects,
     adminStats: uiState.adminStats,
     knowledgeDocs: uiState.knowledgeDocs,
     adminTab: uiState.adminTab,

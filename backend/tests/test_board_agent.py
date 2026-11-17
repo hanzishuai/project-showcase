@@ -93,7 +93,7 @@ def test_agent_receives_actual_action_failure(monkeypatch):
     monkeypatch.setattr(agent.qa_log, "log_turn", log_turn)
     monkeypatch.setattr(agent, "_needs_retrieval", lambda _: False)
     async def run():
-        response = await agent.agent_ask(agent.AgentAskRequest(question="打开示例", ui={"page": "board"}))
+        response = await agent.agent_ask(agent.AgentAskRequest(question="请打开一下示例", ui={"page": "board"}))
         it = response.body_iterator
         meta = await anext(it)
         event = await anext(it)
@@ -105,3 +105,133 @@ def test_agent_receives_actual_action_failure(monkeypatch):
         assert "没有打开项目" in ''.join(frames)
         assert json.loads(seen[1][-1]["content"])["message"] == "项目不存在"
     asyncio.run(run())
+
+
+def test_agent_media_context_and_video_control():
+    text = agent._ui_context({"page": "board", "openProject": "示例", "slideIndex": 1, "mediaType": "video", "mediaPlaying": False})
+    assert "视频" in text and "暂停" in text
+    assert "control_video" in agent.ACTION_TOOLS
+
+
+def test_agent_still_answers_when_retrieval_fails(client, monkeypatch):
+    async def failed_search(*args, **kwargs): raise RuntimeError("temporary retrieval failure")
+    async def stream(messages):
+        yield "token", "我可以帮你查看项目。"
+        yield "tool_calls", {}
+    async def log_turn(**kwargs): pass
+    monkeypatch.setattr(agent.retrieval, "search", failed_search)
+    monkeypatch.setattr(agent, "_stream_llm", stream)
+    monkeypatch.setattr(agent.qa_log, "log_turn", log_turn)
+    monkeypatch.setattr(agent, "_needs_retrieval", lambda _: True)
+    response = client.post("/api/v1/agent/ask", json={"question": "有哪些项目？"})
+    assert "我可以帮你查看项目" in response.text
+    assert "event: done" in response.text
+
+
+def test_simple_page_command_uses_actual_result_without_model(monkeypatch):
+    import asyncio
+
+    async def unexpected_model(*args):
+        raise AssertionError("simple command called the model")
+        yield
+
+    async def run():
+        request = agent.AgentAskRequest(question="切到数据总览", ui={"page": "board"})
+        result = await agent.agent_ask(request)
+        frames = result.body_iterator
+        await anext(frames)
+        action = json.loads((await anext(frames)).split("data: ", 1)[1])
+        assert action["tool"] == "set_board_view"
+        await agent.action_result(agent.ActionResult(
+            action_id=action["action_id"], ok=False, message="页面未切换",
+        ))
+        output = "".join([event async for event in frames])
+        assert "页面未切换" in output
+        assert '"model_calls": 0' in output
+
+    monkeypatch.setattr(agent, "_stream_llm", unexpected_model)
+    asyncio.run(run())
+
+
+def test_direct_project_intro_uses_server_snapshot(client, monkeypatch):
+    from app import agent_direct
+
+    monkeypatch.setattr(agent_direct, "read_board", lambda: ({
+        "projects": [{"name": "样例项目", "intro": "服务器上的最新简介。"}],
+    }, 1))
+    response = client.post("/api/v1/agent/ask", json={
+        "question": "介绍当前项目",
+        "ui": {"page": "board", "openProject": "样例项目", "intro": "浏览器旧简介"},
+    })
+    assert "服务器上的最新简介" in response.text
+    assert '"model_calls": 0' in response.text
+
+
+def test_compound_request_is_not_handled_as_simple_navigation():
+    import asyncio
+
+    assert asyncio.run(agent.direct_reply("切到数据总览，顺便说有多少项目", {"page": "board"})) is None
+
+
+
+def test_project_details_plan_waits_for_actual_result_without_replanning(monkeypatch):
+    import asyncio
+
+    from app import agent_plan
+
+    monkeypatch.setattr(agent_plan, "read_board", lambda: ({
+        "projects": [{"name": "样例项目", "stack": ["Vue 3", "FastAPI"]}],
+    }, 1))
+    calls = 0
+
+    async def stream(messages):
+        nonlocal calls
+        calls += 1
+        assert calls == 1
+        yield "tool_calls", {0: {
+            "id": "plan-1", "name": "open_project_with_details",
+            "arguments": json.dumps({"project": "样例项目", "field": "stack"}),
+        }}
+
+    async def log_turn(**kwargs):
+        pass
+
+    monkeypatch.setattr(agent, "_stream_llm", stream)
+    monkeypatch.setattr(agent.qa_log, "log_turn", log_turn)
+
+    async def run(question, *, resolved, expect_model_calls):
+        request = agent.AgentAskRequest(question=question, ui={
+            "page": "board", "boardProjects": [{"name": "样例项目", "stack": "过时技术栈"}],
+        })
+        stream = (await agent.agent_ask(request)).body_iterator
+        assert "event: meta" in await anext(stream)
+        event = await anext(stream)
+        assert "event: action" in event
+        action = json.loads(event.split("data: ", 1)[1])
+        assert action["tool"] == "open_project"
+        assert action["args"]["project"] == "样例项目"
+        await agent.action_result(agent.ActionResult(
+            action_id=action["action_id"], ok=resolved, message="控件不可用" if not resolved else "完成",
+        ))
+        output = "".join([frame async for frame in stream])
+        assert "Vue 3、FastAPI" in output
+        assert "过时技术栈" not in output
+        assert f'"model_calls": {expect_model_calls}' in output
+        if resolved:
+            assert "已打开样例项目" in output
+        else:
+            assert "已打开样例项目" not in output
+            assert "控件不可用" in output
+
+    asyncio.run(run("打开样例项目，顺便说说技术栈", resolved=True, expect_model_calls=0))
+    asyncio.run(run("帮我把样例项目详情调出来，再告诉我它用了哪些技术", resolved=False, expect_model_calls=1))
+    assert calls == 1
+
+
+def test_page_action_schema_rejects_invalid_arguments():
+    import pytest
+
+    with pytest.raises(ValueError):
+        agent.make_action("filter_board", {"show_history": "false"})
+    with pytest.raises(ValueError):
+        agent.make_action("control_video", {"action": "delete"})
