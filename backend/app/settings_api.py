@@ -47,9 +47,9 @@ EDITABLE: dict[str, dict[str, Any]] = {
     "llm_max_tokens": {"group": "语言模型", "label": "最大输出 Token", "type": "number"},
     "llm_temperature": {"group": "语言模型", "label": "温度", "type": "number", "hint": "0–2"},
     "tts_base_url": {"group": "语音合成", "label": "请求地址", "type": "text", "hint": "百炼兼容的 TTS HTTP 接口完整地址"},
-    "tts_api_key": {"group": "语音合成", "label": "API Key", "type": "password", "secret": True, "hint": "留空时使用共用百炼密钥"},
+    "tts_api_key": {"group": "语音合成", "label": "API Key", "type": "password", "secret": True, "hint": "填写此服务的 API Key；留空表示不修改"},
     "asr_base_url": {"group": "语音识别", "label": "请求地址", "type": "text", "hint": "百炼兼容的实时识别 WebSocket 地址"},
-    "asr_api_key": {"group": "语音识别", "label": "API Key", "type": "password", "secret": True, "hint": "留空时使用共用百炼密钥"},
+    "asr_api_key": {"group": "语音识别", "label": "API Key", "type": "password", "secret": True, "hint": "填写此服务的 API Key；留空表示不修改"},
     "tts_model": {
         "group": "语音合成", "label": "TTS 模型", "type": "text", "secret": False,
         "hint": "例如 qwen3-tts-flash",
@@ -61,10 +61,6 @@ EDITABLE: dict[str, dict[str, Any]] = {
     "asr_model": {
         "group": "语音识别", "label": "ASR 模型", "type": "text", "secret": False,
         "hint": "例如 qwen3-asr-flash-realtime",
-    },
-    "dashscope_api_key": {
-        "group": "语音服务", "label": "百炼 API Key", "type": "password", "secret": True,
-        "hint": "TTS/ASR 共用；留空表示不修改",
     },
     "rag_top_k": {
         "group": "知识检索", "label": "检索条数 top_k", "type": "number", "secret": False,
@@ -134,13 +130,28 @@ def apply_overrides() -> None:
     overrides = _read_overrides()
     applied = []
     for key, value in overrides.items():
-        if key not in EDITABLE or value in (None, ""):
+        if (key not in EDITABLE and key != "dashscope_api_key") or value in (None, ""):
             continue
         try:
             setattr(settings, key, _coerce(key, value))
             applied.append(key)
         except Exception as exc:
             logger.warning("settings_apply_failed key=%s: %s", key, exc)
+    # Copy legacy shared credentials once. Existing per-service keys always win.
+    legacy_key = str(overrides.get("dashscope_api_key") or settings.dashscope_api_key or settings.omni_api_key or "").strip()
+    migrated = {}
+    if legacy_key:
+        for key in ("tts_api_key", "asr_api_key"):
+            if not getattr(settings, key):
+                migrated[key] = legacy_key
+        if migrated:
+            try:
+                _write_overrides({**overrides, **migrated})
+            except OSError as exc:
+                logger.warning("speech_key_migration_persist_failed: %s", exc)
+            for key, value in migrated.items():
+                setattr(settings, key, value)
+            logger.info("speech_keys_migrated: %s", ", ".join(migrated))
     if applied:
         logger.warning("settings_overrides_applied: %s", ", ".join(applied))
 
