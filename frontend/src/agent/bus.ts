@@ -5,7 +5,7 @@ import { snapshotUiState } from './uiState'
 
 export interface AgentAction { tool: string; args: Record<string, unknown>; action_id?: string }
 export interface ActionOutcome { ok: boolean; message: string; ui: Record<string, unknown> }
-type Handler = (args: Record<string, unknown>) => boolean | string | void | Promise<boolean | string | void>
+type Handler = (args: Record<string, unknown>, signal?: AbortSignal) => boolean | string | void | Promise<boolean | string | void>
 const handlers = new Map<string, Handler>()
 export function availableActions(): string[] { return [...handlers.keys()] }
 let failureHandler: ((text: string) => void) | null = null
@@ -28,7 +28,7 @@ export async function dispatchAction(action: AgentAction, signal?: AbortSignal):
   else if (!handler) message = '当前页面没有可用的操作处理器'
   else {
     try {
-      const result = await handler(action.args ?? {})
+      const result = await handler(action.args ?? {}, signal)
       ok = result !== false
       message = typeof result === 'string' && result ? result : ok ? '操作完成' : '操作未完成，请检查当前页面和参数'
     } catch (error) { message = error instanceof Error ? error.message : '操作执行失败' }

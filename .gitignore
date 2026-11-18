@@ -39,3 +39,4 @@ backend/data/settings.json
 .tools/
 
 backend/data/agent_receipts.sqlite3
+backend/data/narration/

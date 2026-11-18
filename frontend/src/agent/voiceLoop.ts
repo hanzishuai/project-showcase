@@ -66,6 +66,7 @@ async function recognizeWav(turn: VoiceTurn, signal: AbortSignal): Promise<strin
 export function createVoiceLoop(options: {
   onStatus: (status: VoiceStatus, detail?: string) => void
   isAssistantBusy: () => boolean
+  isNarrating?: () => boolean
   onInterrupt: () => void
   onQuestion: (text: string, signal: AbortSignal) => Promise<void>
   onAcknowledge: (text: string, signal: AbortSignal) => Promise<void>
@@ -104,11 +105,13 @@ export function createVoiceLoop(options: {
   }
 
   function busy() {
-    return !!output || options.isAssistantBusy()
+    return !!output || options.isAssistantBusy() || !!options.isNarrating?.()
   }
 
   function interrupt(turn: VoiceTurn, text: string) {
-    if (state.mode !== 'active' || state.acknowledgement || turn.duringAcknowledgement || !turn.duringReply || turn.interrupted || !NAME.test(text)) return
+    if ((state.mode !== 'active' && !options.isNarrating?.()) || state.acknowledgement ||
+        turn.duringAcknowledgement || !turn.duringReply || turn.interrupted || !NAME.test(text)) return
+    state.mode = 'active'
     turn.interrupted = true
     output?.abort()
     options.onInterrupt()
@@ -142,6 +145,9 @@ export function createVoiceLoop(options: {
 
   function handleText(turn: VoiceTurn, text: string, signal: AbortSignal) {
     if (!text || signal.aborted || turn.duringAcknowledgement || (turn.voicedSamples < SAMPLE_RATE * 0.5 && ASR_NOISE_PHRASES.test(text.trim()))) return
+    if (state.mode !== 'active') {
+      interrupt(turn, text)
+    }
     if (state.mode !== 'active') {
       if (GOODBYE.test(text)) return
       const question = extractWakeCommand(text)
@@ -206,7 +212,7 @@ export function createVoiceLoop(options: {
     const energy = chunk.reduce((sum, sample) => sum + sample * sample, 0)
     const voiced = energy > chunk.length * (32768 * 0.012) ** 2
 
-    if (!collecting && voiced && !recognizing && (state.mode === 'active' || !busy())) {
+    if (!collecting && voiced && !recognizing && (state.mode === 'active' || options.isNarrating?.() || !busy())) {
       const recognizer = createAsrStreamSession({
         apiBaseUrl: '', signal, connectTimeoutMs: 3000, finalTimeoutMs: 15000,
         onPartial(text: string) {

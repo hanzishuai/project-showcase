@@ -1,3 +1,5 @@
+import type { NarrationSource } from '../../agent/narration'
+
 const BASE = '/api/admin'
 // Knowledge-base preview/commit live on the embeddable RAG surface.
 const RAG = '/api/v1/rag'
@@ -73,11 +75,17 @@ export const api = {
     form.append('file', file)
     return request('/knowledge/preview', { method: 'POST', body: form }, RAG)
   },
-  /** Write the previewed markdown into docs/ and rebuild the index. */
-  commitDocument: (filename: string, markdown: string): Promise<KnowledgeCommitResult> =>
-    request('/knowledge/commit', { method: 'POST', body: JSON.stringify({ filename, markdown }) }, RAG),
+  /** Save the original upload. The preview only contains an excerpt. */
+  commitDocument: (filename: string, file: File, source: NarrationSource): Promise<KnowledgeCommitResult> => {
+    const form = new FormData()
+    form.append('filename', filename)
+    form.append('file', file)
+    form.append('source', source)
+    return request('/knowledge/commit-upload', { method: 'POST', body: form }, RAG)
+  },
   rebuildIndex: (): Promise<KnowledgeRebuildResult> => request('/knowledge/rebuild', { method: 'POST' }, RAG),
-  listDocuments: (): Promise<{ data: KnowledgeDocument[] }> => request('/knowledge/documents', undefined, RAG),
-  deleteDocument: (filename: string) =>
-    request(`/knowledge/documents/${encodeURIComponent(filename)}`, { method: 'DELETE' }, RAG),
+  listDocuments: (source: NarrationSource = 'document'): Promise<{ data: KnowledgeDocument[] }> =>
+    request(`/knowledge/documents?source=${source}`, undefined, RAG),
+  deleteDocument: (filename: string, source: NarrationSource = 'document') =>
+    request(`/knowledge/documents/${encodeURIComponent(filename)}?source=${source}`, { method: 'DELETE' }, RAG),
 }

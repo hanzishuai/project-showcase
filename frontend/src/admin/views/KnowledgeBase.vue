@@ -13,6 +13,9 @@
               <a-button type="primary" :loading="previewing">{{ previewing ? '解析中…' : '上传文档' }}</a-button>
             </template>
           </a-upload>
+          <a-upload :custom-request="(option) => doUpload(option, 'script')" accept=".md,.markdown,.txt" :show-file-list="false" :disabled="previewing">
+            <template #upload-button><a-button>上传讲解稿</a-button></template>
+          </a-upload>
           <a-button @click="rebuild" :loading="rebuilding">重建索引</a-button>
         </div>
       </div>
@@ -30,12 +33,16 @@
       </a-result>
       <a-empty v-else-if="!docs.length" description="暂无文档，可上传 .md / .txt / .docx / .pdf 文件" />
       <div v-else class="table-scroll">
-        <a-table :columns="docColumns" :data="docs" row-key="name" :pagination="false" size="small">
-          <template #name="{ record }"><span class="doc-name" :title="record.name">{{ record.name }}</span></template>
+        <a-table :columns="docColumns" :data="docs" row-key="id" :pagination="false" size="small">
+          <template #name="{ record }">
+            <span class="doc-name" :title="record.name">{{ record.name }}</span>
+            <a-tag v-if="record.source === 'script'">讲解稿</a-tag>
+          </template>
           <template #size="{ record }">{{ formatSize(record.size) }}</template>
           <template #modified_at="{ record }"><span class="time-text">{{ formatTime(record.modified_at) }}</span></template>
           <template #action="{ record }">
-            <a-popconfirm content="确定删除此文档？删除后会自动重建索引。" @ok="removeDoc(record.name)">
+            <a-button type="text" size="small" @click="readDocument(record)">朗读</a-button>
+            <a-popconfirm content="确定删除此文档？" @ok="removeDoc(record.name, record.source)">
               <a-button type="text" status="danger" size="small">删除</a-button>
             </a-popconfirm>
           </template>
@@ -70,7 +77,7 @@
         </div>
         <a-alert v-if="markdownTruncated" type="warning" show-icon style="margin-top:14px">
           <template #title>文档超出预览上限</template>
-          该文档共 {{ previewChars }} 字，预览接口仅返回前 20000 字；确认入库将以预览内容为准，超出部分不会写入，建议拆分文档后分别上传。
+          该文档共 {{ previewChars }} 字，此处显示节选，确认后将保存完整正文。
         </a-alert>
         <a-alert v-if="warningList.length" type="warning" show-icon style="margin-top:14px">
           <template #title>解析提示</template>
@@ -87,11 +94,11 @@
             <template #text="{ record }"><span class="chunk-text">{{ excerpt(record.text) }}</span></template>
           </a-table>
         </div>
-        <p class="preview-note">预览分块与入库后的索引分块一致；确认后将写入知识库并立即重建索引。</p>
+        <p class="preview-note">{{ uploadSource === 'script' ? '讲解稿独立保存，可从文档列表直接朗读。' : '确认后保存正文并更新知识库索引。' }}</p>
       </template>
       <template #footer>
         <a-button :disabled="committing" @click="cancelPreview">取消</a-button>
-        <a-button type="primary" :loading="committing" :disabled="!canCommit" @click="confirmCommit">确认入库</a-button>
+        <a-button type="primary" :loading="committing" :disabled="!canCommit" @click="confirmCommit">{{ uploadSource === 'script' ? '保存讲解稿' : '确认入库' }}</a-button>
       </template>
     </a-modal>
   </div>
@@ -100,6 +107,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { uiState } from '../../agent/uiState'
+import { narration, type NarrationSource } from '../../agent/narration'
 import { api } from '../api'
 import type { KnowledgeDocument, KnowledgePreview } from '../api'
 
@@ -112,7 +120,8 @@ const previewing = ref(false)
 const committing = ref(false)
 const result = ref('')
 const operationError = ref('')
-const docs = ref<KnowledgeDocument[]>([])
+type ListedDocument = KnowledgeDocument & { source: NarrationSource; id: string }
+const docs = ref<ListedDocument[]>([])
 const docsLoading = ref(false)
 const docsError = ref(false)
 
@@ -121,12 +130,14 @@ const preview = ref<KnowledgePreview | null>(null)
 const previewError = ref('')
 const commitFilename = ref('')
 let previewSequence = 0
+const uploadSource = ref<NarrationSource>('document')
+let originalUpload: File | null = null
 
 const docColumns = [
   { title: '文件名', dataIndex: 'name', slotName: 'name' },
   { title: '大小', dataIndex: 'size', slotName: 'size', width: 100 },
   { title: '更新时间', dataIndex: 'modified_at', slotName: 'modified_at', width: 180 },
-  { title: '操作', slotName: 'action', width: 90 },
+  { title: '操作', slotName: 'action', width: 140 },
 ]
 const chunkColumns = [
   { title: '序号', dataIndex: 'index', slotName: 'index', width: 70 },
@@ -157,8 +168,11 @@ async function loadDocs() {
   docsLoading.value = true
   docsError.value = false
   try {
-    const res = await api.listDocuments()
-    docs.value = res.data || []
+    const [documents, scripts] = await Promise.all([api.listDocuments(), api.listDocuments('script')])
+    docs.value = [
+      ...documents.data.map(item => ({ ...item, source: 'document' as const, id: 'document:' + item.name })),
+      ...scripts.data.map(item => ({ ...item, source: 'script' as const, id: 'script:' + item.name }))
+    ]
   } catch {
     docsError.value = true
   } finally {
@@ -204,7 +218,7 @@ function defaultCommitName(filename: string) {
   return (stem || '未命名文档') + '.md'
 }
 
-function doUpload(option: any) {
+function doUpload(option: any, source: NarrationSource = 'document') {
   const file: File | undefined = option?.fileItem?.file
   if (!file) {
     Message.error('未读取到文件，请重新选择')
@@ -223,6 +237,8 @@ function doUpload(option: any) {
     return { abort: () => {} }
   }
   result.value = ''
+  originalUpload = file
+  uploadSource.value = source
   operationError.value = ''
   preview.value = null
   previewError.value = ''
@@ -248,6 +264,7 @@ function doUpload(option: any) {
 function cancelPreview() {
   if (committing.value) return
   previewSequence += 1
+  originalUpload = null
   previewVisible.value = false
   previewing.value = false
   preview.value = null
@@ -256,7 +273,7 @@ function cancelPreview() {
 }
 
 async function confirmCommit() {
-  if (committing.value || !preview.value) return
+  if (committing.value || !preview.value || !originalUpload) return
   const filename = commitFilename.value.trim()
   if (!filename) {
     Message.warning('请填写入库文件名')
@@ -267,13 +284,16 @@ async function confirmCommit() {
     return
   }
   const pending = preview.value
+  const source = uploadSource.value
   committing.value = true
   operationError.value = ''
   result.value = ''
   try {
-    const res = await api.commitDocument(filename, pending.markdown)
-    result.value = `已入库「${res.filename}」，共 ${pending.chunks.length} 个分块；当前索引 ${res.chunks} 个分块 / ${res.documents} 个文档。`
-    Message.success(`入库成功：${pending.chunks.length} 个分块`)
+    const res = await api.commitDocument(filename, originalUpload, source)
+    result.value = source === 'script' ? `已保存讲解稿《${res.filename}》。` :
+      `已入库「${res.filename}」，共 ${pending.chunks.length} 个分块；当前索引 ${res.chunks} 个分块 / ${res.documents} 个文档。`
+    Message.success(source === 'script' ? '讲解稿已保存' : '文档已入库')
+    originalUpload = null
     previewVisible.value = false
     preview.value = null
     previewError.value = ''
@@ -308,12 +328,17 @@ async function rebuild() {
   }
 }
 
-async function removeDoc(filename: string) {
+async function readDocument(doc: ListedDocument) {
+  try { await narration.start(doc.name, doc.source) }
+  catch (err) { Message.error(errorText(err, '无法开始朗读')) }
+}
+
+async function removeDoc(filename: string, source: NarrationSource) {
   operationError.value = ''
   result.value = ''
   try {
-    await api.deleteDocument(filename)
-    result.value = `已删除「${filename}」，索引已自动重建。`
+    await api.deleteDocument(filename, source)
+    result.value = `已删除「${filename}」。`
     Message.success('文档已删除')
     await loadDocs()
   } catch (err: unknown) {

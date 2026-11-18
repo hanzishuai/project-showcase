@@ -44,6 +44,17 @@ class AdminTab(Arguments):
     tab: Literal["dashboard", "conversations", "knowledge", "settings"]
 
 
+class StartNarration(Arguments):
+    title: str = Field(min_length=1, max_length=200, description="用户指明的文档标题或文件名")
+    source: Literal["document", "script"] | None = None
+    section: int | str | None = Field(default=None, description="章节名或从 1 开始的章节编号")
+
+
+class NarrationControl(Arguments):
+    action: Literal["pause", "resume", "stop", "seek", "restart", "previous", "next", "last"]
+    section: int | str | None = Field(default=None, description="seek 时传章节名或从 1 开始的章节编号")
+
+
 PAGE_ACTIONS = {
     "navigate_page": ("切换页面。要打开后台某个页签时，直接用 open_admin_tab。", Navigation),
     "set_board_view": ("切换数据总览或生命周期看板。", BoardView),
@@ -55,6 +66,8 @@ PAGE_ACTIONS = {
     "close_gallery": ("关闭媒体灯箱。", Arguments),
     "open_admin_tab": ("进入管理后台并打开指定页签。", AdminTab),
     "control_video": ("播放或暂停当前展示的视频。", VideoControl),
+    "start_narration": ("按正文顺序开始朗读一篇指定的知识库文档或讲解稿。用户只是要求总结、介绍或提问时不要调用。文档同名时先请用户选择，不要自行猜测。", StartNarration),
+    "control_narration": ("控制当前全文朗读。可暂停（如我先记一下）、续读（接着刚才的地方讲）、停止（这篇不用念了）、跳到章节、从头、上一节、下一节或最后一节。明确指视频时使用视频工具。", NarrationControl),
 }
 
 
