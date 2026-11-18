@@ -118,10 +118,18 @@ try {
   }
   await say('豆姐')
   const beforeNoise = questions.length
+  await say('嗯。')
+  assert.equal(questions.length, beforeNoise, '短促噪声识别为嗯时不应发起对话')
+  await say('嗯嗯！')
+  assert.equal(questions.length, beforeNoise, '短促噪声识别为重复语气词时不应发起对话')
   await say('Thank you.')
   assert.equal(questions.length, beforeNoise, '背景噪声不应触发 Thank you 对话')
   await say('Okay.')
   assert.equal(questions.length, beforeNoise, '背景噪声不应触发 Okay 对话')
+  await say('嗯，我想看看项目')
+  assert.equal(questions.at(-1), '嗯，我想看看项目', '语气词后接完整问题仍应正常处理')
+  releaseAnswer()
+  await flush()
   await say('再问一个问题')
   releaseAnswer()
   await flush()
