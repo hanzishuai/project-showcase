@@ -8,6 +8,7 @@ const SAMPLE_RATE = 16_000
 const PRE_ROLL_SAMPLES = 4_800
 const SILENCE_SAMPLES = 11_200
 const MAX_TURN_SAMPLES = SAMPLE_RATE * 15
+const REPLY_WINDOW_SAMPLES = SAMPLE_RATE * 3
 const MIN_VOICED_SAMPLES = SAMPLE_RATE * 0.16
 const ASR_NOISE_PHRASES = /^(?:thank you|thanks|okay|ok)[.!?，。！？\s]*$/i
 const NAME = /[豆窦][，,、\s]*[姐杰]/
@@ -26,6 +27,7 @@ export function extractWakeCommand(text: string): string | null {
 
 type Recognition = ReturnType<typeof createAsrStreamSession>
 type VoiceTurn = {
+  controller: AbortController
   recognizer: Recognition
   ready: Promise<boolean>
   chunks: Int16Array[]
@@ -87,6 +89,8 @@ export function createVoiceLoop(options: {
     output = null
     state.mode = 'waiting'
     state.acknowledgement = null
+    collecting?.controller.abort()
+    recognizing?.controller.abort()
     collecting?.recognizer.dispose()
     recognizing?.recognizer.dispose()
     collecting = null
@@ -179,6 +183,7 @@ export function createVoiceLoop(options: {
   async function finish(turn: VoiceTurn, signal: AbortSignal) {
     collecting = null
     recognizing = turn
+    const turnSignal = AbortSignal.any([signal, turn.controller.signal])
     if (turn.voicedSamples < MIN_VOICED_SAMPLES && !turn.interrupted) {
       turn.recognizer.dispose()
       recognizing = null
@@ -189,21 +194,21 @@ export function createVoiceLoop(options: {
     try {
       let text = ''
       try {
-        if (await turn.ready && !signal.aborted) text = (await turn.recognizer.stop()).trim()
+        if (await turn.ready && !turnSignal.aborted) text = (await turn.recognizer.stop()).trim()
       } catch {
         // The same utterance can be recovered through the upload endpoint.
       }
-      if (!text && !signal.aborted) {
-        try { text = await recognizeWav(turn, signal) }
+      if (!text && !turnSignal.aborted) {
+        try { text = await recognizeWav(turn, turnSignal) }
         catch (error) { if (!turn.interrupted || !turn.partial) throw error }
       }
-      handleText(turn, text || turn.partial, signal)
+      if (!turnSignal.aborted) handleText(turn, text || turn.partial, signal)
     } catch (error) {
-      fail(signal, error instanceof Error ? error.message : '语音识别失败')
+      if (!turnSignal.aborted) fail(signal, error instanceof Error ? error.message : '语音识别失败')
     } finally {
       turn.recognizer.dispose()
       if (recognizing === turn) recognizing = null
-      if (!signal.aborted && !busy()) options.onStatus(state.mode === 'active' ? 'listening' : 'wake')
+      if (!signal.aborted && !collecting && !recognizing && !busy()) options.onStatus(state.mode === 'active' ? 'listening' : 'wake')
     }
   }
 
@@ -212,9 +217,15 @@ export function createVoiceLoop(options: {
     const energy = chunk.reduce((sum, sample) => sum + sample * sample, 0)
     const voiced = energy > chunk.length * (32768 * 0.012) ** 2
 
+    if (!collecting && voiced && recognizing && busy() && !recognizing.interrupted) {
+      recognizing.controller.abort()
+      recognizing.recognizer.dispose()
+      recognizing = null
+    }
     if (!collecting && voiced && !recognizing && (state.mode === 'active' || options.isNarrating?.() || !busy())) {
+      const controller = new AbortController()
       const recognizer = createAsrStreamSession({
-        apiBaseUrl: '', signal, connectTimeoutMs: 3000, finalTimeoutMs: 15000,
+        apiBaseUrl: '', signal: AbortSignal.any([signal, controller.signal]), connectTimeoutMs: 3000, finalTimeoutMs: 15000,
         onPartial(text: string) {
           if (signal.aborted || (collecting !== turn && recognizing !== turn)) return
           turn.partial = text
@@ -222,7 +233,7 @@ export function createVoiceLoop(options: {
         }
       })
       const turn: VoiceTurn = {
-        recognizer, ready: recognizer.open().then(() => true, () => false),
+        controller, recognizer, ready: recognizer.open().then(() => true, () => false),
         chunks: preRoll, samples: preRollSize, quiet: 0, voicedSamples: 0,
         duringReply: busy(), duringAcknowledgement: !!state.acknowledgement, interrupted: false, partial: ''
       }
@@ -242,7 +253,16 @@ export function createVoiceLoop(options: {
       if (voiced) turn.voicedSamples += chunk.length
       turn.quiet = voiced ? 0 : turn.quiet + chunk.length
       turn.recognizer.push(chunk)
-      if (turn.quiet >= SILENCE_SAMPLES || turn.samples >= MAX_TURN_SAMPLES) void finish(turn, signal)
+      const replyWindowEnded = turn.duringReply && !turn.interrupted && turn.samples >= REPLY_WINDOW_SAMPLES
+      if (replyWindowEnded) {
+        preRoll = []
+        preRollSize = 0
+        for (let i = turn.chunks.length - 1; i >= 0 && preRollSize < PRE_ROLL_SAMPLES; i--) {
+          preRoll.unshift(turn.chunks[i])
+          preRollSize += turn.chunks[i].length
+        }
+      }
+      if (turn.quiet >= SILENCE_SAMPLES || turn.samples >= MAX_TURN_SAMPLES || replyWindowEnded) void finish(turn, signal)
       return
     }
 
