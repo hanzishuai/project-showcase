@@ -158,13 +158,13 @@ async function start(title: string, source?: NarrationSource, requested?: number
   const requestSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal
   status.value = 'loading'
   try {
-    const response = await fetch('/api/v1/rag/knowledge/narration', {
+    const response = await fetch('/api/v1/rag/narration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, source }),
       signal: requestSignal
     })
-    if (response.status === 401 || response.status === 403) throw new Error('请先登录管理后台，再朗读这篇文档。')
+    if (response.status === 401 || response.status === 403) throw new Error('当前无法访问朗读服务。')
     const data = await response.json()
     if (!response.ok) throw new Error(data.detail || '无法加载这篇文档。')
     requestSignal.throwIfAborted()

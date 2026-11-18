@@ -57,6 +57,7 @@ _RATE_LIMITED_PREFIXES = (
     "/api/v1/rag/ask",
     "/api/v1/rag/tts",
     "/api/v1/rag/asr",
+    "/api/v1/rag/narration",
     "/api/v1/agent/ask",
     "/api/admin/settings/test",
 )
