@@ -21,14 +21,20 @@ def test_long_upload_can_read_original_ending(client, monkeypatch, tmp_path):
                             data={"filename": "talk.md", "source": source})
         assert saved.status_code == 200
     request = {"title": "《talk》", "source": "script"}
-    path = "/api/v1/rag/knowledge/narration"
-    assert client.post(path, json=request).status_code == 401
-    response = client.post(path, json=request, headers=header)
+    path = "/api/v1/rag/narration"
+    assert client.get("/api/v1/rag/knowledge/documents").status_code == 401
+    assert client.post("/api/v1/rag/knowledge/commit-upload").status_code == 401
+    assert client.delete("/api/v1/rag/knowledge/documents/talk.md").status_code == 401
+    public_docs = client.get("/api/v1/rag/narration/documents")
+    assert public_docs.status_code == 200
+    assert {item["source"] for item in public_docs.json()["data"]} == {"document", "script"}
+    response = client.post(path, json=request)
     assert response.status_code == 200
     chapters = response.json()["sections"]
     assert [chapter["title"] for chapter in chapters] == ["开场", "收尾"]
     assert chapters[-1]["segments"] == ["收尾", "最后请大家举手。"]
-    assert client.post(path, json={"title": "talk"}, headers=header).status_code == 404
+    assert client.post(path, json={"title": "talk"}).status_code == 404
+    assert client.post(path, json={"title": "../talk", "source": "document"}).status_code == 404
     assert [doc["name"] for doc in knowledge_import.list_documents()] == ["talk.md"]
 
 

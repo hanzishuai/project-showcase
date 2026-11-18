@@ -251,7 +251,7 @@ class NarrationRequest(BaseModel):
     source: Literal["document", "script"] | None = None
 
 
-@router.post("/knowledge/narration")
+@router.post("/narration")
 async def knowledge_narration(request: NarrationRequest) -> dict:
     try:
         return await asyncio.to_thread(narration.load_document, request.title, request.source)
@@ -259,6 +259,20 @@ async def knowledge_narration(request: NarrationRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/narration/documents")
+async def narration_documents() -> dict:
+    documents, scripts = await asyncio.gather(
+        asyncio.to_thread(knowledge_import.list_documents),
+        asyncio.to_thread(knowledge_import.list_documents, script=True),
+    )
+    return {
+        "data": [
+            *({"name": item["name"], "source": "document"} for item in documents),
+            *({"name": item["name"], "source": "script"} for item in scripts),
+        ]
+    }
 
 
 @router.post("/knowledge/rebuild")

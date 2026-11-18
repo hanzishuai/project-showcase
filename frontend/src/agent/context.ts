@@ -15,7 +15,7 @@ export async function refreshGlobalContext(): Promise<void> {
     uiState.adminStats = null
   }
   try {
-    const response = await fetch('/api/v1/rag/knowledge/documents')
+    const response = await fetch('/api/v1/rag/narration/documents')
     if (response.ok) {
       const data = await response.json()
       const list = Array.isArray(data.data) ? data.data : []
