@@ -69,6 +69,11 @@ SYSTEM_MAP = """
 
 TOOLS = [tool_definition(name, *definition) for name, definition in PAGE_ACTIONS.items()]
 ACTION_TOOLS = frozenset(PAGE_ACTIONS)
+TOOLS.append({"type": "function", "function": {
+    "name": "read_narration_position",
+    "description": "用户询问刚念到的句子或其含义时，读取当前朗读位置的正文。这个动作只读，不会续播。",
+    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+}})
 PROJECT_PLAN_TOOL = "open_project_with_details"
 TOOLS.append(tool_definition(
     PROJECT_PLAN_TOOL,
@@ -235,6 +240,7 @@ _SYSTEM_PROMPT = """你是「{name}」，{platform}的数字人助手。你既�
    如果这次不想或不能操作，就不要说已经做了，改成询问或说明。
 8. 项目简介修改和新增版本须调用 propose_board_change，等待用户确认和工具返回结果；取消、超时或失败时明确说明未保存。其他写操作不支持。
 9. 动作执行不了（比如项目名不在系统里）时，直接说明没有这个项目，不要硬开。
+10. 识别全文朗读及播放控制的意思，无须固定口令。要求逐字读某篇文档或按讲解稿念，调用 start_narration。已经有朗读任务时，根据用户语义调用 control_narration。用户询问刚念到的内容时，使用 read_narration_position 获取正文来回答，并保持朗读暂停。朗读工具负责播放正文，回复只简短确认结果。
 
 ## 回答风格（会被语音播报）
 - 口语、短句，一句话不超过 40 字；不用 Markdown、不用表情。
@@ -306,6 +312,10 @@ def _ui_context(ui: dict | None, *, include_inventory: bool = True) -> str:
     capabilities = ui.get("availableActions")
     if isinstance(capabilities, list):
         parts.append("前端当前已注册操作：" + ("、".join(name for name in capabilities if isinstance(name, str) and name in ACTION_TOOLS) or "无"))
+    narration = ui.get("narration")
+    if isinstance(narration, dict):
+        position = {key: narration[key] for key in ("title", "status", "section", "sectionNumber", "sections", "chapterTitles") if key in narration}
+        parts.append("全文朗读状态：" + json.dumps(position, ensure_ascii=False)[:1500])
     if page == "admin" and ui.get("adminAccess") == "ready" and isinstance(ui.get("adminPageContext"), dict):
         parts.append("后台当前页数据：" + json.dumps(ui["adminPageContext"], ensure_ascii=False)[:6000])
     if page == "edit" and isinstance(ui.get("editProjects"), list):
@@ -615,6 +625,10 @@ async def _model_turn(question: str, request: AgentAskRequest, timings: dict, ac
                     knowledge = await _knowledge_context(question)
                     timings["retrieval"] += int((time.perf_counter() - started) * 1000)
                 result = knowledge
+            elif name == "read_narration_position":
+                position = (current_ui or {}).get("narration")
+                excerpt = position.get("excerpt") if isinstance(position, dict) else None
+                result = json.dumps({"text": excerpt[:800]}, ensure_ascii=False) if isinstance(excerpt, str) and excerpt else "当前没有朗读正文。"
             elif name == PROJECT_PLAN_TOOL:
                 result = "这个计划仅用于独立请求。请对当前复合请求使用普通查询及页面工具。"
             elif name in ACTION_TOOLS or name == "propose_board_change":

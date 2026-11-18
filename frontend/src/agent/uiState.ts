@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { narration } from './narration'
 
 /** 当前界面状态：随组件变化更新，发给 Agent 作为上下文。 */
 export const uiState = reactive({
@@ -35,6 +36,7 @@ export const uiState = reactive({
 
 export function snapshotUiState(): Record<string, unknown> {
   return {
+    narration: narration.snapshot(),
     page: uiState.page,
     boardView: uiState.boardView,
     projectFilter: uiState.projectFilter,

@@ -4,14 +4,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Literal
+from urllib.parse import unquote
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from pp7rag.engine.prompts import PROMPT_VERSION
 from pp7rag.engine.retriever import retriever
-from pp7rag.ragapi import knowledge_import, qa_log, suggestions
+from pp7rag.ragapi import knowledge_import, narration, qa_log, suggestions
 from pp7rag.ragapi.orchestrator import RagStreamSession
 from pp7rag.ragapi.providers import asr, llm, tts
 from pp7rag.ragapi.service import rag_service
@@ -203,8 +205,6 @@ async def health() -> dict:
 @router.post("/knowledge/preview")
 async def knowledge_preview(file: UploadFile = File(...)) -> dict:
     """Parse a docx/pdf/md upload and return chunk preview without touching the index."""
-    from urllib.parse import unquote
-
     from pp7rag.ragapi.knowledge_import import MAX_UPLOAD_BYTES
 
     data = await _read_upload_limited(file, MAX_UPLOAD_BYTES, "文件")
@@ -229,19 +229,51 @@ async def knowledge_commit(request: CommitRequest) -> dict:
     return {"status": "committed", **result}
 
 
+@router.post("/knowledge/commit-upload")
+async def knowledge_commit_upload(
+    file: UploadFile = File(...),
+    filename: str = Form(..., min_length=1, max_length=200),
+    source: Literal["document", "script"] = Form("document"),
+) -> dict:
+    data = await _read_upload_limited(file, knowledge_import.MAX_UPLOAD_BYTES, "文件")
+    try:
+        result = await asyncio.to_thread(
+            knowledge_import.commit_upload, filename, unquote(file.filename or "upload"), data,
+            script=source == "script",
+        )
+    except knowledge_import.ImportError_ as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "committed", **result}
+
+
+class NarrationRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    source: Literal["document", "script"] | None = None
+
+
+@router.post("/knowledge/narration")
+async def knowledge_narration(request: NarrationRequest) -> dict:
+    try:
+        return await asyncio.to_thread(narration.load_document, request.title, request.source)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/knowledge/rebuild")
 async def knowledge_rebuild() -> dict:
     return await asyncio.to_thread(knowledge_import.rebuild)
 
 
 @router.get("/knowledge/documents")
-async def knowledge_documents() -> dict:
-    return {"data": await asyncio.to_thread(knowledge_import.list_documents)}
+async def knowledge_documents(source: Literal["document", "script"] = "document") -> dict:
+    return {"data": await asyncio.to_thread(knowledge_import.list_documents, script=source == "script")}
 
 
 @router.delete("/knowledge/documents/{name}")
-async def knowledge_delete(name: str) -> dict:
-    ok = await asyncio.to_thread(knowledge_import.delete_document, name)
+async def knowledge_delete(name: str, source: Literal["document", "script"] = "document") -> dict:
+    ok = await asyncio.to_thread(knowledge_import.delete_document, name, script=source == "script")
     if not ok:
         raise HTTPException(status_code=404, detail="文档不存在或文件名非法。")
     return {"status": "deleted", "filename": name}

@@ -17,6 +17,7 @@ from pypdf import PdfReader
 from pp7rag.config import settings
 from pp7rag.knowledge.indexer import indexer
 from pp7rag.knowledge.loader import MAX_SECTION_CHARS, SECTION_OVERLAP, chunk_text, load_markdown_files, split_by_heading
+from pp7rag.ragapi.narration import MAX_CHARS, script_directory
 
 logger = logging.getLogger(__name__)
 
@@ -143,19 +144,30 @@ def _docs_dir() -> Path:
     return Path(settings.data_dir) / "docs"
 
 
-def commit(filename: str, markdown: str) -> dict:
+def commit(filename: str, markdown: str, *, script: bool = False) -> dict:
     """Write docs/<safe-name>.md and rebuild the index. Blocking: call in a thread."""
-    docs_dir = _docs_dir()
+    docs_dir = script_directory() if script else _docs_dir()
     docs_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(filename).stem.strip() or "未命名文档"
     safe = re.sub(r'[\\/:*?"<>|]+', "_", stem)[:80]
     target = docs_dir / f"{safe}.md"
     target.write_text(markdown.strip() + "\n", encoding="utf-8")
+    if script:
+        return {"filename": target.name, "chunks": 0, "documents": len(list(docs_dir.glob("*.md")))}
     chunks = load_markdown_files(docs_dir)
     indexer.index_chunks(chunks)
     logger.info("knowledge_committed file=%s chunks=%d", target.name, len(chunks))
     return {"filename": target.name, "path": str(target), "chunks": len(chunks),
             "documents": len(list(docs_dir.glob("*.md")))}
+
+
+def commit_upload(filename: str, original_filename: str, data: bytes, *, script: bool) -> dict:
+    _, markdown, _ = parse_document(original_filename, data)
+    if not markdown.strip():
+        raise ImportError_("文件没有可保存的正文。")
+    if len(markdown) > MAX_CHARS:
+        raise ImportError_("正文超出长度上限，请分成多个文档。")
+    return commit(filename, markdown, script=script)
 
 
 def rebuild() -> dict:
@@ -169,8 +181,8 @@ def rebuild() -> dict:
     return {"status": "rebuilt", "chunks": len(chunks), "documents": len(list(docs_dir.glob("*.md")))}
 
 
-def list_documents() -> list[dict]:
-    docs_dir = _docs_dir()
+def list_documents(*, script: bool = False) -> list[dict]:
+    docs_dir = script_directory() if script else _docs_dir()
     rows = []
     for path in sorted(docs_dir.glob("*.md")):
         stat = path.stat()
@@ -178,13 +190,14 @@ def list_documents() -> list[dict]:
     return rows
 
 
-def delete_document(name: str) -> bool:
-    docs_dir = _docs_dir()
+def delete_document(name: str, *, script: bool = False) -> bool:
+    docs_dir = script_directory() if script else _docs_dir()
     candidate = (docs_dir / name).resolve()
     if docs_dir.resolve() not in candidate.parents or candidate.suffix.lower() != ".md":
         return False
     if not candidate.exists():
         return False
     candidate.unlink()
-    rebuild()
+    if not script:
+        rebuild()
     return True

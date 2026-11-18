@@ -26,6 +26,7 @@ let rec, stream, starts = 0, interrupts = 0, attempts = 0
 let captureOpen = true
 let connectionFailed = false
 let answering = false
+let narrating = false
 let finishAnswer
 let releaseAnswer
 const questions = []
@@ -58,9 +59,11 @@ async function say(text) { audible(); await endTurn(text) }
 const loop = createVoiceLoop({
   onStatus: status => statuses.push(status),
   isAssistantBusy: () => answering,
+  isNarrating: () => narrating,
   onInterrupt() {
     interrupts++
     answering = false
+    narrating = false
     finishAnswer?.()
   },
   async onQuestion(question, signal) {
@@ -125,6 +128,21 @@ try {
   loop.stop()
   assert.equal(captureOpen, false)
   assert.equal(loop.active, false)
+
+  narrating = true
+  await loop.start()
+  audible()
+  const beforeNarration = interrupts
+  stream.options.onPartial('其他人在说话')
+  assert.equal(narrating, true)
+  stream.options.onPartial('豆姐')
+  assert.equal(interrupts, beforeNarration + 1)
+  assert.equal(narrating, false, '尚未唤醒时也能叫名字立即暂停朗读')
+  await endTurn('豆姐，这句话的意思是什么')
+  assert.equal(questions.at(-1), '这句话的意思是什么')
+  releaseAnswer()
+  await flush()
+  loop.stop()
 
   connectionFailed = true
   await loop.start()

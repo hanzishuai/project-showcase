@@ -11,7 +11,7 @@
       ref="avatarRef"
       v-show="!collapsed"
       api-base-url=""
-      :fetch="agentFetch"
+      :fetch="fetchWithNarration"
       stream-mode="sse"
       position="bottom-left"
       :width="600"
@@ -34,6 +34,27 @@
       </button>
       <span role="status">{{ voiceMessage }}</span>
     </div>
+
+    <section v-if="!collapsed && narrationDocument" class="agent-narration" aria-label="全文朗读">
+      <div class="agent-narration__title">
+        <strong>{{ narrationDocument.title }}</strong>
+        <span role="status">{{ narrationLabel }}</span>
+      </div>
+      <progress :value="completed" :max="total" aria-label="朗读进度" />
+      <div class="agent-narration__controls">
+        <select :value="position.chapter + 1" aria-label="选择朗读章节" @change="selectChapter">
+          <option v-for="(chapter, index) in narrationDocument.sections" :key="index" :value="index + 1">
+            {{ index + 1 }}. {{ chapter.title }}
+          </option>
+        </select>
+        <button type="button" @click="playingNarration ? narration.pause() : resumeFromCard()">
+          {{ playingNarration ? '暂停' : narrationStatus === 'error' ? '重试' : narrationStatus === 'finished' ? '重播' : '继续' }}
+        </button>
+        <button type="button" @click="narration.stop()">停止</button>
+      </div>
+      <p v-if="narrationError && narrationStatus === 'error'" role="alert">{{ narrationError }}</p>
+      <p v-else>{{ voiceEnabled ? '说“豆姐”可以打断，接着直接说你的问题。' : '开启语音唤醒后，可以说话打断。' }}</p>
+    </section>
 
     <!-- 收起 / 展开（看板页不使用：那里是页面布局的一部分） -->
     <button
@@ -72,14 +93,16 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RagAvatar, { DEFAULT_CHARACTER_SRC } from '../../vendor/rag-avatar/rag-avatar.js'
 import { agentFetch, clearAgentHistory } from '../agent/fetch'
-import { setActionFailureHandler } from '../agent/bus'
+import { registerAction, setActionFailureHandler } from '../agent/bus'
 import { uiState } from '../agent/uiState'
+import { narration } from '../agent/narration'
 import { createVoiceLoop, INTERRUPT_PHRASE, WAKE_PHRASE, type VoiceStatus } from '../agent/voiceLoop'
 
 const props = defineProps<{ page: 'kanban' | 'edit' | 'admin' }>()
 
 const dockEl = ref<HTMLDivElement | null>(null)
 interface ChatLike {
+  state?: { value: string }
   messages?: { value: unknown[] }
   busy?: { value: boolean }
   speaking?: { value: boolean }
@@ -161,6 +184,31 @@ const observeApp = () => {
 
 const onError = (message: string) => console.warn('[rag-avatar]', message)
 
+const { document: narrationDocument, status: narrationStatus, error: narrationError, position, completed, total } = narration
+const playingNarration = computed(() => ['loading', 'preparing', 'playing'].includes(narrationStatus.value))
+const narrationLabel = computed(() => {
+  const labels = { idle: '', loading: '正在载入', preparing: '正在准备', playing: '朗读中', paused: '已暂停', error: '待重试', finished: '已读完' }
+  return labels[narrationStatus.value]
+})
+function isChatBusy() {
+  const chat = avatarRef.value?.chat
+  return !!(chat?.busy?.value || chat?.speaking?.value || chat?.state?.value === 'speaking')
+}
+const fetchWithNarration: typeof fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  if (url.includes('/api/v1/rag/ask')) narration.pause()
+  return agentFetch(input, init)
+}
+function resumeFromCard() {
+  avatarRef.value?.chat?.interrupt?.()
+  narration.resume()
+}
+function selectChapter(event: Event) {
+  avatarRef.value?.chat?.interrupt?.()
+  narration.seek(Number((event.target as HTMLSelectElement).value))
+}
+watch(narrationDocument, doc => { if (doc) collapsed.value = false })
+
 const voiceStatus = ref<VoiceStatus>('off')
 const voiceError = ref('')
 const voiceReply = ref('')
@@ -171,11 +219,10 @@ const voiceLoop = createVoiceLoop({
     voiceReply.value = status === 'answering' ? (detail || '') : ''
     if (status === 'error') { voiceEnabled.value = false; voiceError.value = detail || '语音不可用' }
   },
-  isAssistantBusy() {
-    const chat = avatarRef.value?.chat
-    return !!(chat?.busy?.value || chat?.speaking?.value)
-  },
+  isAssistantBusy: isChatBusy,
+  isNarrating: () => narrationStatus.value === 'playing',
   onInterrupt() {
+    narration.pause()
     avatarRef.value?.chat?.interrupt?.()
   },
   async onAcknowledge(text, signal) {
@@ -235,6 +282,7 @@ const onClickCapture = (event: MouseEvent): void => {
   if (!target) return
   if (target.closest('button[title="清空对话"]')) clearAgentHistory()
   if (!target.closest('.pp7-chat-mic')) return
+  narration.pause()
   if (voiceEnabled.value) { voiceEnabled.value = false; voiceLoop.stop() }
   const chat = avatarRef.value?.chat
   if (!chat?.interrupt) return
@@ -245,7 +293,7 @@ const onClickCapture = (event: MouseEvent): void => {
 
 const toggleCollapsed = () => {
   collapsed.value = !collapsed.value
-  if (collapsed.value && voiceEnabled.value) toggleVoice()
+  if (collapsed.value && voiceEnabled.value && !narrationDocument.value) toggleVoice()
 }
 
 watch(
@@ -263,7 +311,34 @@ watch(
   }
 )
 
+let unregisterNarration: Array<() => void> = []
 onMounted(() => {
+  narration.setChatBusy(isChatBusy)
+  unregisterNarration = [
+    registerAction('start_narration', async (args, signal) => {
+      const source = args.source === 'script' || args.source === 'document' ? args.source : undefined
+      const chapter = typeof args.section === 'number' || typeof args.section === 'string' ? args.section : undefined
+      const title = await narration.start(String(args.title ?? ''), source, chapter, signal)
+      return `已准备朗读《${title}》。`
+    }),
+    registerAction('control_narration', args => {
+      if (!narrationDocument.value) throw new Error('还没有选中一篇朗读文档。')
+      switch (args.action) {
+        case 'pause': narration.pause(); return '已暂停，保留朗读位置。'
+        case 'resume': narration.resume(); return '接着刚才的位置朗读。'
+        case 'stop': narration.stop(); return '已结束朗读。'
+        case 'restart': narration.seek(1); return '从头朗读。'
+        case 'previous': narration.seek(position.value.chapter); return '返回上一节。'
+        case 'next': narration.seek(position.value.chapter + 2); return '跳到下一节。'
+        case 'last': narration.seek(narrationDocument.value.sections.length); return '从最后一节开始朗读。'
+        case 'seek':
+          if (typeof args.section !== 'string' && typeof args.section !== 'number') throw new Error('请指定朗读章节。')
+          narration.seek(args.section)
+          return '已切换朗读章节。'
+        default: return false
+      }
+    })
+  ]
   // 动作执行失败时，让数字人自己说一句，而不是只弹 toast
   setActionFailureHandler((text) => {
     const messages = avatarRef.value?.chat?.messages
@@ -284,6 +359,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   voiceLoop.stop()
+  narration.stop()
+  narration.setChatBusy(() => false)
+  unregisterNarration.forEach(off => off())
   setActionFailureHandler(null)
   window.removeEventListener('resize', measure)
   appObserver?.disconnect()
@@ -291,3 +369,40 @@ onBeforeUnmount(() => {
 })
 
 </script>
+
+<style scoped>
+.agent-narration {
+  position: absolute;
+  z-index: 9;
+  top: 68px;
+  right: 8px;
+  width: min(320px, calc(100% - 16px));
+  padding: 12px;
+  border: 1px solid #3b526e;
+  border-radius: 12px;
+  background: #121826;
+  color: #e6edf7;
+}
+.agent-narration__title, .agent-narration__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-narration__title strong, .agent-narration__controls select {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-narration__title span, .agent-narration p { color: #b1c1d4; font-size: 12px; }
+.agent-narration progress { width: 100%; accent-color: #22b8c9; }
+.agent-narration button, .agent-narration select {
+  background: #172338;
+  color: #e6edf7;
+  border: 1px solid #3b526e;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.agent-narration p { margin: 8px 0 0; }
+</style>
