@@ -25,6 +25,8 @@ assert.equal(extractWakeCommand('豆姐，你好'), '')
 let rec, stream, starts = 0, interrupts = 0, attempts = 0
 let captureOpen = true
 let connectionFailed = false
+let delayedStop = false
+let finishDelayed
 let answering = false
 let narrating = false
 let finishAnswer
@@ -42,7 +44,7 @@ globalThis.mockAsrStream = options => stream = {
   options, final: '',
   async open() { if (connectionFailed) throw new Error('socket unavailable') },
   push() {},
-  async stop() { return this.final },
+  async stop() { if (delayedStop) return await new Promise(resolve => { finishDelayed = resolve }); return this.final },
   dispose() { this.disposed = true }
 }
 globalThis.fetch = async () => { attempts++; return { ok: false, status: 503 } }
@@ -141,6 +143,35 @@ try {
   await endTurn('豆姐，这句话的意思是什么')
   assert.equal(questions.at(-1), '这句话的意思是什么')
   releaseAnswer()
+  await flush()
+  loop.stop()
+
+  narrating = true
+  await loop.start()
+  audible()
+  const echoStream = stream
+  for (let i = 0; i < 40; i++) rec.options.onPcmChunk(new Int16Array(1280).fill(5000))
+  assert.notEqual(stream, echoStream, '持续的播放回声不能占用整个 15 秒识别窗口')
+  const beforeEchoInterrupt = interrupts
+  stream.options.onPartial('豆姐')
+  assert.equal(interrupts, beforeEchoInterrupt + 1)
+  await endTurn('豆姐')
+  loop.stop()
+
+  narrating = true
+  delayedStop = true
+  await loop.start()
+  audible()
+  const firstStream = stream
+  await endTurn('环境音')
+  audible()
+  assert.notEqual(stream, firstStream, '前一句识别未返回时仍要监听新的打断词')
+  const beforeOverlap = interrupts
+  stream.options.onPartial('豆姐')
+  assert.equal(interrupts, beforeOverlap + 1, '正在识别前一句时也应立即打断')
+  delayedStop = false
+  await endTurn('豆姐')
+  finishDelayed?.('环境音')
   await flush()
   loop.stop()
 
